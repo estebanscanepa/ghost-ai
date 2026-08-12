@@ -1,7 +1,12 @@
-export default function Home() {
-  return (
-    <div className="flex flex-1 items-center justify-center">
-      <div className="text-2xl font-semibold tracking-tight"> <p>ghost AI</p> </div>
-    </div>
-  );
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+
+/**
+ * `/` is a router, not a page: signed-in users land in the editor, everyone
+ * else is sent to sign-in. There is no marketing surface at the root.
+ */
+export default async function Home() {
+  const { userId } = await auth();
+
+  redirect(userId ? "/editor" : "/sign-in");
 }

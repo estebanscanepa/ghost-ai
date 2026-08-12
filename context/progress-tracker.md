@@ -4,11 +4,11 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Current Phase
 
-- Editor chrome — base components that frame every editor screen are complete.
+- Editor shell — complete. `/editor` exists, mounts the chrome, and owns the sidebar state. The canvas area is still a placeholder.
 
 ## Current Goal
 
-- Pick the next feature unit. The editor navbar, project sidebar, and dialog pattern are ready to compose an editor route against.
+- Fill the `/editor` canvas area. The layout hands the page a full-height, `relative`-parented region with the navbar above it and the sidebar overlaying it; React Flow mounts there next.
 
 ## Completed
 
@@ -27,19 +27,42 @@ Update this file whenever the current phase, active feature, or implementation s
   - `components/editor/editor-dialog.tsx` — the dialog pattern: wraps the shadcn `Dialog` with `rounded-3xl` / `bg-elevated` / `border-surface-border` and slots for title, description, body, and footer actions. No concrete dialogs built yet.
   - Verified against a temporary `/editor-preview` route (since removed): open and closed sidebar states render with no console errors, the canvas content does not shift when the sidebar opens, the navbar icon flips with state, and the dialog renders title/description/body/footer over a blurred backdrop. `tsc --noEmit` and `eslint` clean.
 
+- `context/feature-specs/03-auth.md` — Clerk authentication:
+  - Installed via the Clerk CLI (`clerk init --app app_3Hpo5AwjP6uZ8ixrACCXxOLaUEh`), linked to the `Ghost AI` application (development instance). `@clerk/nextjs` v7 and `@clerk/ui` v1 added.
+  - `app/layout.tsx` — `ClerkProvider` inside `<body>`. Appearance is Clerk's `dark` theme from `@clerk/ui/themes` as the base, with every color variable re-pointed at the project's CSS custom properties (`var(--bg-elevated)`, `var(--accent-primary)`, `var(--text-muted)`, …) plus `fontFamily`, `fontFamilyMono`, and `borderRadius`. No hex values. The `@clerk/ui/themes/shadcn.css` import was dropped from `globals.css` with the shadcn theme.
+  - `proxy.ts` — `clerkMiddleware()` with a handler that calls `auth.protect()` on everything that is not a public route. The public list is built from `NEXT_PUBLIC_CLERK_SIGN_IN_URL` / `NEXT_PUBLIC_CLERK_SIGN_UP_URL`, each expanded to cover its catch-all children. Matcher unchanged.
+  - `app/page.tsx` — no longer a landing page. Reads `await auth()` and redirects: `userId` → `/editor`, otherwise → `/sign-in`.
+  - `app/sign-in/[[...sign-in]]/page.tsx` and `app/sign-up/[[...sign-up]]/page.tsx` — render `<SignIn />` / `<SignUp />` inside `AuthPanel`.
+  - `components/auth/auth-panel.tsx` — the shared auth shell. A 50/50 split at `lg` and up: the left half sits on `bg-elevated` with a `border-r`, holding the logo mark + wordmark at the top, a `text-3xl` headline and supporting paragraph in the middle, a three-item feature list (brand-tinted icon square, title, one-line description), and the copyright at the bottom. The right half centers the Clerk form on `bg-base`. Below `lg` the left panel is `hidden` and only the form renders. No gradients, no hero, no cards.
+  - `components/editor/editor-navbar.tsx` — renders Clerk's `<UserButton />` in the right section. The `actions?: ReactNode` slot added in the previous unit is gone, and `components/auth/auth-controls.tsx` was deleted with it: `/` is a redirect now, so there is no signed-out surface left that needed sign-in/sign-up buttons.
+  - Verified: `next build`, `tsc --noEmit`, and `eslint` clean. Signed out, `/`, `/editor`, and an arbitrary unknown path all 307 to `/sign-in?redirect_url=…` while `/sign-in` and `/sign-up` return 200. Screenshots at 1440×900, 1024×820, and 420×860 (form only) match the spec, the Clerk card renders on the project palette with the cyan primary, and the console is clean apart from Clerk's development-keys warning.
+  - Type is Geist Sans throughout, confirmed by computed style rather than by eye: `html`, `body`, the panel copy, and Clerk's own card and buttons all resolve to `Geist, "Geist Fallback"`, with 400 and 600 both passing `document.fonts.check()`. Clerk picks it up from the `fontFamily` / `fontFamilyMono` appearance variables.
+
+- `app/editor` — the editor route and its layout:
+  - `app/editor/layout.tsx` — Server Component. Renders `EditorShell` around `children`, typed with `LayoutProps<"/editor">`.
+  - `components/editor/editor-shell.tsx` — the client half. Owns `isSidebarOpen` (`useState`, closed by default), passes `isSidebarOpen` / `onToggleSidebar` to `EditorNavbar` and `isOpen` / `onClose` to `ProjectSidebar`. Outer `div` is `flex h-dvh flex-col overflow-hidden bg-base`; the navbar is the fixed-height row and `<main>` is `relative min-h-0 flex-1 overflow-hidden` — `relative` so the absolutely positioned sidebar anchors to it, `min-h-0` so the canvas can shrink instead of overflowing the viewport.
+  - `app/editor/page.tsx` — placeholder filling the canvas area until React Flow lands.
+  - Verified: `next typegen`, `tsc --noEmit`, `eslint .`, and `next build` all clean. `/editor` builds as a static route.
+
 ## In Progress
 
 - Nothing.
 
 ## Next Up
 
-- Add the next planned feature unit here.
+- The canvas itself — React Flow inside `app/editor/page.tsx`.
 
 ## Open Questions
 
 - None outstanding.
 
 ## Architecture Decisions
+
+- **Routes are protected by default; the public list comes from the env vars.** `proxy.ts` calls `auth.protect()` on every request that is not sign-in or sign-up, so a new route is private the moment it exists — forgetting a guard fails closed. The public matcher is derived from `NEXT_PUBLIC_CLERK_SIGN_IN_URL` / `NEXT_PUBLIC_CLERK_SIGN_UP_URL` rather than hardcoded, so the public surface and Clerk's own redirect targets cannot drift apart. This is coarse gate-keeping only: per-project ownership checks still belong at each mutation boundary.
+- **`/` is a router, not a page.** There is no marketing surface at the root — it reads the session and redirects to `/editor` or `/sign-in`. Anything public-facing would need its own route added to the public matcher.
+- **Clerk is themed by variable, not by element.** `appearance` uses Clerk's `dark` theme as the base and overrides its `variables` with the project's CSS custom properties. Nothing targets Clerk's `elements` classes, so restyling Clerk means changing a token in `globals.css` and Clerk internals stay upgradeable.
+
+- **The route layout stays a Server Component; the shared state lives one level down.** `isSidebarOpen` is shared between the navbar toggle and the sidebar, so it has to sit above both — but putting `"use client"` on `app/editor/layout.tsx` would drag every future editor screen's chrome onto the client boundary for no reason. `EditorShell` absorbs the client-ness instead, and `children` still arrives from the server untouched.
 
 - **The sidebar overlays, it never reflows.** `ProjectSidebar` is absolutely positioned and stays mounted in both states — closed just translates it off the left edge (plus `inert` so it drops out of the tab order). Any screen that renders it must supply a `relative` container. This keeps the canvas viewport size constant, which matters once React Flow owns that area.
 - **Dialogs compose `EditorDialog`, not the shadcn `Dialog` directly.** The overlay, radius, surface, and footer treatment live in one place; concrete dialogs supply only title, description, body, and footer actions.
@@ -52,6 +75,10 @@ Update this file whenever the current phase, active feature, or implementation s
 ## Session Notes
 
 - shadcn CLI v4 is preset-driven and prompts interactively. The non-interactive invocation used here: `npx shadcn@latest init --base radix -p nova --no-monorepo -y`. `--base-color` no longer exists.
-- `app/layout.tsx` still carries the `create-next-app` metadata (`title: "Create Next App"`). Left alone as out of scope for this unit — worth fixing whenever the app shell is next touched.
-- The chrome components are not mounted anywhere yet — there is no editor route. Wiring the `isOpen` state and rendering them lives with whichever unit introduces `app/editor` (or the project workspace route).
+- The signed-in half of the flow (`/` → `/editor`, the sidebar toggle, the avatar menu) still has not been exercised against a real session — no test account exists, and `/editor` is behind `auth.protect()`, so it cannot be opened in a browser signed out. Everything so far is verified by compiler and build only.
+- `LayoutProps<"/editor">` resolves against generated route types, so `tsc --noEmit` fails on a brand-new route until types are regenerated (`next typegen`, or any `next dev` / `next build`). The error looks like a bad type argument — `Type '"/editor"' does not satisfy the constraint '"/"'` — but it just means the typegen output is stale.
+- `next lint` is gone in Next 16. Run `npx eslint .` directly.
 - Removed the unused `Button` import from `app/page.tsx` — it was the only eslint warning in the repo and blocked a clean lint run.
+- `next dev` rewrites the `nextjs-agent-rules` block at the top of `AGENTS.md` on every run (see `node_modules/next/dist/server/lib/generate-agent-files.js`). It only touches its own block above the `END:nextjs-agent-rules` marker; the project instructions below are untouched. Commit the churn rather than reverting it, or set `agentRules: false` in `next.config.ts`.
+- `@clerk/ui` pulls a large transitive tree (~344 packages, including web3 wallet adapters for Clerk's Web3 sign-in). `npm audit` reports 21 vulnerabilities (10 moderate, 11 high) from those transitives — none in first-party code. Worth a look before production.
+- Only a development Clerk instance exists. A production instance must be created and its keys configured before deploying.
