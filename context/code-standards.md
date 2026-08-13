@@ -41,9 +41,17 @@
 - Do not store large generated content directly in the database.
 - Task run records are first-class relational data — treat ownership and run IDs as verified before any token issuance.
 
+## Dependencies
+
+- Every production advisory must either be remediated or carry an approved exception in `auditExceptions.allow` in `package.json`. `npm run audit` enforces this and is the gate to run before deploying.
+- An exception must state its `scope` (the full dependency path), a `reason` grounded in reachability, and an `expires` date. Exceptions expire on purpose — the gate fails once the date passes, forcing a re-check for an upstream fix.
+- Prefer a scoped `overrides` entry (`{ "parent": { "dep": "range" } }`) over a global one, so a transitive fix cannot silently downgrade an unrelated consumer.
+- Do not reach for blunt install-time flags (`omit=peer`, `legacy-peer-deps`) to make an audit pass; they change resolution for the whole tree to suppress a symptom.
+
 ## File Organization
 
 - `lib/` — shared infrastructure: Prisma client, auth helpers, utilities.
+- `scripts/` — repo tooling run via npm scripts, not application code.
 - `trigger/` — all durable background tasks and AI workflows.
 - `components/` — UI composition only; no business logic.
 - `app/api/` — route handlers for auth, triggering, and persistence.

@@ -6,9 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "audit": "node scripts/audit-gate.mjs"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.7.4",
+    "@clerk/ui": "^1.30.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.31.0",
@@ -29,5 +33,33 @@
     "eslint-config-next": "16.3.0",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "jayson": {
+      "uuid": "^11.1.1"
+    }
+  },
+  "auditExceptions": {
+    "$comment": "Read by scripts/audit-gate.mjs (npm run audit). Each entry allows one advisory in the production tree until its expiry. Anything not listed here fails the gate.",
+    "allow": [
+      {
+        "advisory": "GHSA-w3rx-r6r6-pgpr",
+        "package": "image-size",
+        "severity": "high",
+        "title": "ICNS parser allows denial of service through an infinite loop",
+        "expires": "2026-11-13",
+        "scope": "@clerk/ui > @solana/wallet-adapter-react > @solana-mobile/wallet-adapter-mobile > react-native > @react-native/community-cli-plugin > metro > image-size",
+        "reason": "No patched image-size exists: the advisory covers <=2.0.2 and 2.0.2 is the latest published version, while metro@0.87.0 (latest) still requires ^1.0.2. react-native is only present because npm auto-installs it as an unused peer of @solana-mobile/*, which reference it exclusively from their index.native.js entry points; Next.js resolves index.js, so metro and image-size are React Native build tooling that is never bundled, served, or executed by this web app. Reachability requires parsing attacker-supplied ICNS/JXL/HEIF files, which this app never does."
+      },
+      {
+        "advisory": "GHSA-5p2g-fcmc-qvqq",
+        "package": "image-size",
+        "severity": "high",
+        "title": "JXL and HEIF parsers allow denial of service through infinite loops",
+        "expires": "2026-11-13",
+        "scope": "@clerk/ui > @solana/wallet-adapter-react > @solana-mobile/wallet-adapter-mobile > react-native > @react-native/community-cli-plugin > metro > image-size",
+        "reason": "Same unpatchable image-size dependency and same unreachable react-native build-tooling path as GHSA-w3rx-r6r6-pgpr."
+      }
+    ]
   }
 }
