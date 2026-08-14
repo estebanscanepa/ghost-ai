@@ -4,11 +4,11 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Current Phase
 
-- Editor shell — complete. `/editor` exists, mounts the chrome, and owns the sidebar state. The canvas area is still a placeholder.
+- Editor home and project dialogs — complete. `/editor` shows the home screen, the sidebar lists mock projects with rename/delete actions, and all three dialogs are wired. Nothing persists yet.
 
 ## Current Goal
 
-- Fill the `/editor` canvas area. The layout hands the page a full-height, `relative`-parented region with the navbar above it and the sidebar overlaying it; React Flow mounts there next.
+- Give the projects real data. The dialogs and sidebar are wired against `MOCK_PROJECTS` and `useProjectDialogs().submit()` is a no-op; the Prisma model, the API routes behind create/rename/delete, and the ownership checks at each mutation boundary come next.
 
 ## Completed
 
@@ -44,13 +44,26 @@ Update this file whenever the current phase, active feature, or implementation s
   - `app/editor/page.tsx` — placeholder filling the canvas area until React Flow lands.
   - Verified: `next typegen`, `tsc --noEmit`, `eslint .`, and `next build` all clean. `/editor` builds as a static route.
 
+- `context/feature-specs/04-project-dialogs.md` — editor home and project dialogs (mock data only, no API calls or persistence):
+  - `types/project.ts` — `Project` (`id`, `name`, `slug`, `ownership`) and `ProjectOwnership` (`"owned" | "shared"`). Ownership is what gates the sidebar's rename/delete actions.
+  - `lib/mock-projects.ts` — `MOCK_PROJECTS`: three owned, two shared. Replaced by a database query when projects become real.
+  - `lib/slug.ts` — `slugify()`: NFKD normalize, strip diacritics, lowercase, non-alphanumerics to `-`, trim leading/trailing `-`. Drives the live slug preview. Spot-checked against accented, punctuated, empty, and all-separator input.
+  - `hooks/use-project-dialogs.ts` — `useProjectDialogs()` owns all dialog state: `kind` (`create` / `rename` / `delete` / `null`), `target` project, the shared `name` field, the derived `slug`, `isSubmitting`, `canSubmit`, and `nameError`. Name validation is against the *slug*, not the raw string: `"!!!"` is non-empty after `trim()` but slugifies to `""`, so create and rename both require `slug.length > 0`. `nameError` stays `null` for an untouched empty field so the dialog does not open already showing an error. Delete has no name field and is unaffected. `submit()` currently marks the in-flight state and closes — the mutation call lands inside it once the API exists.
+  - `components/editor/project-dialogs.tsx` — `ProjectDialogsProvider` calls the hook, renders all three dialogs, and publishes the controller through context; `useProjectDialogActions()` is the consumer hook. Mounted in `EditorShell`, wrapping the whole editor.
+  - `components/editor/dialogs/` — `create-project-dialog.tsx` (name input + live slug preview in mono, replaced by the error text when the name yields no slug), `rename-project-dialog.tsx` (prefilled + `autoFocus` input, current name in the description, same error text), `delete-project-dialog.tsx` (confirmation only, no input, `variant="destructive"` confirm). Create and rename put their body in a `<form id>` and the footer submit button carries `form={id}`, so Enter submits across the `EditorDialog` body/footer split. All three compose `EditorDialog`.
+  - `components/editor/editor-home.tsx` — the centered home screen: heading, supporting line, and a `New Project` button with `Plus` that opens the Create dialog. No cards. `app/editor/page.tsx` is still a Server Component and just renders it.
+  - `components/editor/project-sidebar.tsx` — takes a `projects` prop and splits it by ownership across the two tabs; each row shows the project name only — no slug, in either tab — and owned rows add ghost `Pencil` / `Trash2` buttons with per-project `aria-label`s. Shared rows render no actions. Empty states still render when a tab's list is empty. The footer `New Project` button opens the Create dialog.
+  - `components/editor/editor-shell.tsx` — passes `MOCK_PROJECTS` to the sidebar and adds the `md:hidden` backdrop scrim: a full-bleed `<button>` at `z-20` (under the `z-30` panel) on `bg-background/70` with a blur, fading in with the sidebar and `inert` + `pointer-events-none` when closed.
+  - Verified: `next typegen`, `tsc --noEmit`, `eslint .`, and `next build` all clean; `/editor` still prerenders as a static route. Not exercised in a browser — `/editor` is behind `auth.protect()` and there is still no test account.
+
 ## In Progress
 
 - Nothing.
 
 ## Next Up
 
-- The canvas itself — React Flow inside `app/editor/page.tsx`.
+- Project persistence — the Prisma `Project` model, the create/rename/delete API routes, and `submit()` calling them.
+- The canvas itself — React Flow inside the editor route.
 
 ## Open Questions
 
@@ -66,6 +79,16 @@ Update this file whenever the current phase, active feature, or implementation s
 
 - **The sidebar overlays, it never reflows.** `ProjectSidebar` is absolutely positioned and stays mounted in both states — closed just translates it off the left edge (plus `inert` so it drops out of the tab order). Any screen that renders it must supply a `relative` container. This keeps the canvas viewport size constant, which matters once React Flow owns that area.
 - **Dialogs compose `EditorDialog`, not the shadcn `Dialog` directly.** The overlay, radius, surface, and footer treatment live in one place; concrete dialogs supply only title, description, body, and footer actions.
+
+- **Project dialog state is one controller shared through context.** The two entry points sit on opposite sides of the route boundary — the sidebar is in the layout, the `New Project` button is in the page — so neither can pass props to the other. `ProjectDialogsProvider` (mounted in `EditorShell`) holds the single `useProjectDialogs()` controller and renders the dialogs once; anything below reaches it through `useProjectDialogActions()`. Only one dialog is open at a time, so one `kind` plus one name field is the entire state.
+
+- **Dialog components are presentational; the hook owns the state.** Each dialog takes `open`, its field values, and callbacks — no dialog holds its own `useState`. When persistence lands, the mutation goes into the hook's `submit()` and no dialog component changes.
+
+- **The name is validated by the slug it produces.** `name.trim().length > 0` is not enough — `"!!!"`, `"---"`, and `"@#$"` all pass it and slugify to `""`, which would create a project with no slug. `canSubmit` requires a non-empty slug for both create and rename, so a name that cannot address a project cannot be submitted. This is a UX guard, not the authority: the server has to re-derive and enforce the slug (plus uniqueness) when persistence lands.
+
+- **The slug is shown at creation, not in the lists.** The Create Project dialog previews the slug the name will produce, because that is the moment the user still controls it. Sidebar rows — owned and shared alike — show the project name only; the slug is a URL detail that adds noise to a list. `Project.slug` still exists on the model for routing.
+
+- **Ownership is a UI affordance in the sidebar, not an authorization check.** Rename and delete render only for `ownership === "owned"`, which is presentation. The real check stays at each mutation boundary per the invariants in `architecture-context.md`.
 
 - **Theming is token-driven, not component-driven.** `components/ui/*` stays exactly as generated; the dark look comes from `app/globals.css` mapping shadcn's semantic tokens (`--background`, `--card`, `--primary`, `--border`, `--input`, `--ring`, …) onto the palette in `context/ui-context.md`. Restyling means changing a token, not editing a foundation component.
 - **Dark-only with no light palette.** The dark values live directly on `:root` (plus `color-scheme: dark`); there is no light block and no `prefers-color-scheme` branch, so the system theme cannot leak through. The `dark` class on `<html>` exists only to activate the `dark:` variants baked into the generated components.
