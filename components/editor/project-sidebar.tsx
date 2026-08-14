@@ -1,14 +1,17 @@
 "use client";
 
-import { FolderOpen, Plus, Users, X } from "lucide-react";
+import { FolderOpen, Pencil, Plus, Trash2, Users, X } from "lucide-react";
 
+import { useProjectDialogActions } from "@/components/editor/project-dialogs";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import type { Project } from "@/types/project";
 
 interface ProjectSidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  projects: Project[];
 }
 
 interface EmptyStateProps {
@@ -27,12 +30,74 @@ function EmptyState({ icon, title, description }: EmptyStateProps) {
   );
 }
 
+interface ProjectListItemProps {
+  project: Project;
+  onRename: (project: Project) => void;
+  onDelete: (project: Project) => void;
+}
+
+/**
+ * A single project row. Rename and delete are rendered only for owned
+ * projects — a collaborator sees the project, not the actions on it.
+ */
+function ProjectListItem({
+  project,
+  onRename,
+  onDelete,
+}: ProjectListItemProps) {
+  const isOwned = project.ownership === "owned";
+
+  return (
+    <li className="flex items-center gap-1 rounded-xl px-2 py-2 transition-colors hover:bg-subtle">
+      {/* Name only. The slug is a URL detail — it surfaces in the Create
+          Project dialog's preview, not in the list. */}
+      <p className="min-w-0 flex-1 truncate text-sm text-copy-primary">
+        {project.name}
+      </p>
+
+      {isOwned ? (
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onRename(project)}
+            aria-label={`Rename ${project.name}`}
+          >
+            <Pencil className="h-3.5 w-3.5 text-copy-muted" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onDelete(project)}
+            aria-label={`Delete ${project.name}`}
+          >
+            <Trash2 className="h-3.5 w-3.5 text-copy-muted" />
+          </Button>
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
 /**
  * Floating project sidebar. It is absolutely positioned, so it overlays the
  * editor canvas instead of pushing it — the parent must be `relative`. Closed
  * state slides the panel off the left edge rather than unmounting it.
  */
-export function ProjectSidebar({ isOpen, onClose }: ProjectSidebarProps) {
+export function ProjectSidebar({
+  isOpen,
+  onClose,
+  projects,
+}: ProjectSidebarProps) {
+  const { openCreate, openRename, openDelete } = useProjectDialogActions();
+
+  const ownedProjects = projects.filter(
+    (project) => project.ownership === "owned"
+  );
+  const sharedProjects = projects.filter(
+    (project) => project.ownership === "shared"
+  );
+
   return (
     <aside
       aria-hidden={!isOpen}
@@ -61,24 +126,50 @@ export function ProjectSidebar({ isOpen, onClose }: ProjectSidebarProps) {
         </TabsList>
 
         <TabsContent value="my-projects" className="min-h-0 overflow-y-auto">
-          <EmptyState
-            icon={<FolderOpen className="h-8 w-8" />}
-            title="No projects yet"
-            description="Projects you create will show up here."
-          />
+          {ownedProjects.length > 0 ? (
+            <ul className="flex flex-col gap-0.5 p-2">
+              {ownedProjects.map((project) => (
+                <ProjectListItem
+                  key={project.id}
+                  project={project}
+                  onRename={openRename}
+                  onDelete={openDelete}
+                />
+              ))}
+            </ul>
+          ) : (
+            <EmptyState
+              icon={<FolderOpen className="h-8 w-8" />}
+              title="No projects yet"
+              description="Projects you create will show up here."
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="shared" className="min-h-0 overflow-y-auto">
-          <EmptyState
-            icon={<Users className="h-8 w-8" />}
-            title="Nothing shared with you"
-            description="Projects shared by collaborators will show up here."
-          />
+          {sharedProjects.length > 0 ? (
+            <ul className="flex flex-col gap-0.5 p-2">
+              {sharedProjects.map((project) => (
+                <ProjectListItem
+                  key={project.id}
+                  project={project}
+                  onRename={openRename}
+                  onDelete={openDelete}
+                />
+              ))}
+            </ul>
+          ) : (
+            <EmptyState
+              icon={<Users className="h-8 w-8" />}
+              title="Nothing shared with you"
+              description="Projects shared by collaborators will show up here."
+            />
+          )}
         </TabsContent>
       </Tabs>
 
       <div className="border-t border-surface-border p-3">
-        <Button className="w-full" size="lg">
+        <Button className="w-full" size="lg" onClick={openCreate}>
           <Plus className="h-4 w-4" />
           New Project
         </Button>

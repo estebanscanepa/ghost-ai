@@ -3,7 +3,10 @@
 import { useState } from "react";
 
 import { EditorNavbar } from "@/components/editor/editor-navbar";
+import { ProjectDialogsProvider } from "@/components/editor/project-dialogs";
 import { ProjectSidebar } from "@/components/editor/project-sidebar";
+import { MOCK_PROJECTS } from "@/lib/mock-projects";
+import { cn } from "@/lib/utils";
 
 interface EditorShellProps {
   children: React.ReactNode;
@@ -17,24 +20,43 @@ interface EditorShellProps {
  * The `<main>` is `relative` on purpose: `ProjectSidebar` positions itself
  * absolutely against it so opening the panel overlays the canvas instead of
  * reflowing it.
+ *
+ * `ProjectDialogsProvider` wraps everything because both the sidebar (in the
+ * layout) and the `New Project` button (in the page) open the same dialogs.
  */
 export function EditorShell({ children }: EditorShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-base">
-      <EditorNavbar
-        isSidebarOpen={isSidebarOpen}
-        onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
-      />
-
-      <main className="relative min-h-0 flex-1 overflow-hidden">
-        <ProjectSidebar
-          isOpen={isSidebarOpen}
-          onClose={() => setIsSidebarOpen(false)}
+    <ProjectDialogsProvider>
+      <div className="flex h-dvh flex-col overflow-hidden bg-base">
+        <EditorNavbar
+          isSidebarOpen={isSidebarOpen}
+          onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
         />
-        {children}
-      </main>
-    </div>
+
+        <main className="relative min-h-0 flex-1 overflow-hidden">
+          {/* Mobile-only scrim: tapping outside the panel closes it. On wider
+              screens the sidebar overlays the canvas without blocking it. */}
+          <button
+            type="button"
+            inert={!isSidebarOpen}
+            aria-label="Close project sidebar"
+            onClick={() => setIsSidebarOpen(false)}
+            className={cn(
+              "absolute inset-0 z-20 bg-background/70 backdrop-blur-[2px] transition-opacity duration-200 md:hidden",
+              isSidebarOpen ? "opacity-100" : "pointer-events-none opacity-0"
+            )}
+          />
+
+          <ProjectSidebar
+            isOpen={isSidebarOpen}
+            onClose={() => setIsSidebarOpen(false)}
+            projects={MOCK_PROJECTS}
+          />
+          {children}
+        </main>
+      </div>
+    </ProjectDialogsProvider>
   );
 }
