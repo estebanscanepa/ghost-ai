@@ -20,6 +20,10 @@ interface EmptyStateProps {
   description: string;
 }
 
+/**
+ * Placeholder for a tab whose list is empty. Centred in the tab's full height,
+ * so the panel does not collapse when a user has no projects in one of them.
+ */
 function EmptyState({ icon, title, description }: EmptyStateProps) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">

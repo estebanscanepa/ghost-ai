@@ -49,6 +49,13 @@ const clerkAppearance = {
   },
 };
 
+/**
+ * Root layout for every route. It establishes the three things the rest of the
+ * app assumes are already in place: the Geist font variables referenced by the
+ * `--font-*` tokens, the `dark` class that activates the `dark:` variants baked
+ * into `components/ui/*`, and the `ClerkProvider` that themes Clerk's own UI
+ * from the project's CSS custom properties.
+ */
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
