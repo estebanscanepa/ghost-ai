@@ -38,11 +38,26 @@ export function createRoomSuffix(): string {
  * Builds the room ID a name will produce. Returns `""` when the name has no
  * usable slug — `"!!!"` is not empty but slugifies to nothing, and a bare
  * suffix is not an addressable room.
+ *
+ * The slug is capped at whatever `ROOM_ID_MAX_LENGTH` leaves once the hyphen
+ * and suffix are reserved, so this can never hand the server an ID its own
+ * `isRoomId` gate would reject. The cap is not redundant with the 100-character
+ * name limit: `slugify` normalizes NFKD first, and that expands — a name of 100
+ * `Ⅷ` characters is within the name limit and slugifies to 400 characters. Once
+ * truncated, any trailing hyphen has to come off too, or the join would produce
+ * the `--` that `ROOM_ID_PATTERN` forbids.
  */
 export function buildRoomId(name: string, suffix: string): string {
   const slug = slugify(name);
 
-  return slug.length > 0 ? `${slug}-${suffix}` : "";
+  if (slug.length === 0) {
+    return "";
+  }
+
+  const available = ROOM_ID_MAX_LENGTH - suffix.length - 1;
+  const capped = slug.slice(0, Math.max(available, 0)).replace(/-+$/, "");
+
+  return capped.length > 0 ? `${capped}-${suffix}` : "";
 }
 
 /** Whether a value is a room ID this app could have produced. The server's gate on a client-supplied project ID. */
