@@ -35,6 +35,15 @@ interface ProjectDialogsProviderProps {
   children: React.ReactNode;
 }
 
+/**
+ * Holds the one `useProjectDialogs()` controller for the editor and renders all
+ * three dialogs beside `children`, so they mount once no matter how many places
+ * can open them.
+ *
+ * Each dialog's `onOpenChange` only acts on `false`: opening is always driven by
+ * an explicit `openCreate` / `openRename` / `openDelete` call, so the callback
+ * exists to catch Escape, the overlay, and the close button.
+ */
 export function ProjectDialogsProvider({
   children,
 }: ProjectDialogsProviderProps) {

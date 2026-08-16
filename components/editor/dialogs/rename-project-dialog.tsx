@@ -21,6 +21,14 @@ interface RenameProjectDialogProps {
   onSubmit: () => void;
 }
 
+/**
+ * Renames an existing project. The input opens prefilled and focused so the
+ * common case is type-and-Enter; the description keeps the current name visible
+ * once the field has been edited away from it.
+ *
+ * Uses the same `<form id>` / `form={FORM_ID}` pairing as the create dialog to
+ * submit on Enter across `EditorDialog`'s body/footer split.
+ */
 export function RenameProjectDialog({
   open,
   name,

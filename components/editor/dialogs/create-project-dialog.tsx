@@ -20,6 +20,14 @@ interface CreateProjectDialogProps {
   onSubmit: () => void;
 }
 
+/**
+ * Names a new project and previews the slug that name will produce. The body is
+ * a `<form id>` and the footer's confirm button carries `form={FORM_ID}`,
+ * because `EditorDialog` renders body and footer as siblings — that pairing is
+ * what makes Enter submit from inside the input.
+ *
+ * Presentational: every value and callback comes from `useProjectDialogs()`.
+ */
 export function CreateProjectDialog({
   open,
   name,

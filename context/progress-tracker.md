@@ -4,11 +4,11 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Current Phase
 
-- Editor home and project dialogs — complete. `/editor` shows the home screen, the sidebar lists mock projects with rename/delete actions, and all three dialogs are wired. Nothing persists yet.
+- Prisma schema and data layer — complete. `Project` and `ProjectCollaborator` exist in Postgres, the first migration is applied, and `lib/prisma.ts` exports the cached client. Nothing reads or writes them yet — the UI is still on `MOCK_PROJECTS`.
 
 ## Current Goal
 
-- Give the projects real data. The dialogs and sidebar are wired against `MOCK_PROJECTS` and `useProjectDialogs().submit()` is a no-op; the Prisma model, the API routes behind create/rename/delete, and the ownership checks at each mutation boundary come next.
+- Put the data layer behind the UI. The dialogs and sidebar are wired against `MOCK_PROJECTS` and `useProjectDialogs().submit()` is a no-op; the create/rename/delete API routes, the ownership checks at each mutation boundary, and the project query that replaces the mock list come next.
 
 ## Completed
 
@@ -56,18 +56,25 @@ Update this file whenever the current phase, active feature, or implementation s
   - `components/editor/editor-shell.tsx` — passes `MOCK_PROJECTS` to the sidebar and adds the `md:hidden` backdrop scrim: a full-bleed `<button>` at `z-20` (under the `z-30` panel) on `bg-background/70` with a blur, fading in with the sidebar and `inert` + `pointer-events-none` when closed.
   - Verified: `next typegen`, `tsc --noEmit`, `eslint .`, and `next build` all clean; `/editor` still prerenders as a static route. Not exercised in a browser — `/editor` is behind `auth.protect()` and there is still no test account.
 
+- `context/feature-specs/05-prisma.md` — Prisma schema and data layer:
+  - `prisma/models/project.prisma` — `ProjectStatus` enum (`DRAFT`, `ARCHIVED`), `Project` (`ownerId` as the Clerk user ID, `name`, optional `description`, `status` defaulting to `DRAFT`, `canvasJsonPath` for the future Vercel Blob reference, `createdAt` / `updatedAt`, `@@index([ownerId])` and `@@index([createdAt])`), and `ProjectCollaborator` (`projectId` relation with `onDelete: Cascade`, `email`, `createdAt`, `@@unique([projectId, email])`, `@@index([email])`, `@@index([projectId, createdAt])`). No fields beyond the spec — the only additions are the `id` primary keys Prisma requires.
+  - `prisma/schema.prisma` keeps only the `generator client` (`prisma-client`, output `../app/generated/prisma`) and `datasource db` blocks; `prisma.config.ts` points `schema` at the `prisma/` folder, so every `.prisma` file under it is loaded.
+  - `prisma/migrations/20260816090946_init_project_models/` — the first migration, applied to the Prisma Postgres instance. Creates both tables, the enum, all four indexes, the unique constraint, and the `ON DELETE CASCADE` foreign key.
+  - `lib/prisma.ts` — the cached singleton. Branches on `DATABASE_URL`: `prisma+postgres://` constructs `new PrismaClient({ accelerateUrl })`, anything else goes through `new PrismaPg({ connectionString })`. Throws if `DATABASE_URL` is unset. Caches on `globalThis` outside production so hot reloads reuse one client.
+  - Verified: `tsc --noEmit`, `eslint .`, and `npm run build` clean. Exercised against the real database — created a `Project` (defaults land: `status` `DRAFT`, `description` and `canvasJsonPath` null, both timestamps set), confirmed the duplicate `(projectId, email)` insert is rejected, confirmed deleting the project cascades its collaborator away, and confirmed a second import of `lib/prisma` returns the same instance. Test rows removed; both tables are back to zero.
+
 ## In Progress
 
 - Nothing.
 
 ## Next Up
 
-- Project persistence — the Prisma `Project` model, the create/rename/delete API routes, and `submit()` calling them.
+- Project persistence — the create/rename/delete API routes over the new models, the ownership checks in front of them, and `submit()` calling them; the sidebar switching from `MOCK_PROJECTS` to a real query.
 - The canvas itself — React Flow inside the editor route.
 
 ## Open Questions
 
-- None outstanding.
+- **`Project` has no `slug` column.** `types/project.ts` and the Create dialog's live preview both assume one, and `lib/slug.ts` derives it, but `05-prisma.md` specifies the model field-by-field and does not include it ("do not add extra fields"). The API routes will have to either add a migration for `slug` (with the uniqueness the dialog's validation already assumes the server enforces) or address projects by `id` and drop the slug from the UI contract.
 
 ## Architecture Decisions
 
@@ -90,6 +97,9 @@ Update this file whenever the current phase, active feature, or implementation s
 
 - **Ownership is a UI affordance in the sidebar, not an authorization check.** Rename and delete render only for `ownership === "owned"`, which is presentation. The real check stays at each mutation boundary per the invariants in `architecture-context.md`.
 
+- **The schema is multi-file; models live in `prisma/models/`.** `prisma.config.ts` sets `schema` to the `prisma/` folder rather than a single file, so `schema.prisma` holds only the generator and datasource and every domain gets its own `.prisma` file. Adding the spec, task-run, and canvas models later means adding files, not growing one.
+- **The connection strategy is chosen from the URL scheme, not from an env flag.** `lib/prisma.ts` reads `DATABASE_URL` and picks Accelerate for `prisma+postgres://` or the `@prisma/adapter-pg` driver adapter for everything else. Prisma 7 requires one or the other — there is no engine-managed default — and deriving it from the scheme means moving between a direct Postgres URL and an Accelerate URL is a `.env` change with no code change. Note that both are already in the tree as the same value: `.env` and `.env.local` each set the direct `postgres://…@db.prisma.io` string, and `.env.local` wins for Next.js while `prisma.config.ts` reads `.env` through `dotenv/config`.
+
 - **Theming is token-driven, not component-driven.** `components/ui/*` stays exactly as generated; the dark look comes from `app/globals.css` mapping shadcn's semantic tokens (`--background`, `--card`, `--primary`, `--border`, `--input`, `--ring`, …) onto the palette in `context/ui-context.md`. Restyling means changing a token, not editing a foundation component.
 - **Dark-only with no light palette.** The dark values live directly on `:root` (plus `color-scheme: dark`); there is no light block and no `prefers-color-scheme` branch, so the system theme cannot leak through. The `dark` class on `<html>` exists only to activate the `dark:` variants baked into the generated components.
 - **`bg-base` is an `@utility`, not a `--color-base` theme token.** A `base` entry in Tailwind's color namespace also generates a `text-base` color utility, which shadows the built-in `text-base` font size and silently recolored `CardTitle`. Avoid color token names that collide with built-in utility names (`base`, `sm`, `lg`, …).
@@ -109,4 +119,6 @@ Update this file whenever the current phase, active feature, or implementation s
   - Why the exception is safe: `react-native` is in the tree only because npm auto-installs it as a peer of `@solana-mobile/*`, which reference it exclusively from their `index.native.js` entry points. Next.js resolves `index.js`, so `metro` and `image-size` are React Native *build tooling* that never reaches the bundle — confirmed by grepping `.next/` after a build (no hits). Exploitation would also require parsing attacker-supplied ICNS/JXL/HEIF files, which this app never does.
   - Rejected alternative: `omit=peer` in `.npmrc` zeroes the audit, but it drops 203 packages including `@solana/web3.js`, which Clerk's Web3 sign-in genuinely uses on web. Too broad a hammer for build tooling that never ships.
 - Dependency audit is now gated, not just documented. `npm run audit` (`scripts/audit-gate.mjs`) runs `npm audit --omit=dev` and fails on any advisory lacking an unexpired entry in `auditExceptions.allow` in `package.json`. Expired exceptions fail too, so the accepted risk cannot outlive its 2026-11-13 review date. Re-check `image-size` for a patched release at that point.
+- The generated Prisma client lands in `app/generated/prisma/` (gitignored), so `npx prisma generate` has to run after a fresh clone or a schema change before `tsc` will pass. `prisma migrate dev` does not generate it here — the generate step ran separately.
+- `prisma migrate dev` fails with `P1001 Can't reach database server at db.prisma.io:5432` under the agent sandbox even though the host is reachable (`nc` succeeds and a plain `pg` client connects). The Prisma schema engine is a separate native binary and its outbound connection is what gets blocked; run migrations outside the sandbox.
 - Only a development Clerk instance exists. A production instance must be created and its keys configured before deploying.
