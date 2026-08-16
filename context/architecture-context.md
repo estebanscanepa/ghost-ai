@@ -33,8 +33,10 @@
 
 - Every project has a single owner (Clerk user ID).
 - Projects can include additional collaborators.
+- Collaborators are keyed by email, so collaborator access is resolved through the caller's verified Clerk email addresses, not their user ID.
 - Only authenticated users can access protected routes.
-- Only the owner or a collaborator can mutate project resources.
+- Reading a project is open to the owner and its collaborators; renaming and deleting are owner-only.
+- A project's ID is also its Liveblocks room ID. It is derived from the project name plus a short random suffix at creation time and never generated separately, so a project record always addresses its room.
 - Liveblocks room tokens are issued only after verifying project membership.
 
 ## Starter System Designs

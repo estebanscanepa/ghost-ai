@@ -6,11 +6,11 @@ import { CreateProjectDialog } from "@/components/editor/dialogs/create-project-
 import { DeleteProjectDialog } from "@/components/editor/dialogs/delete-project-dialog";
 import { RenameProjectDialog } from "@/components/editor/dialogs/rename-project-dialog";
 import {
-  useProjectDialogs,
-  type ProjectDialogsController,
-} from "@/hooks/use-project-dialogs";
+  useProjectActions,
+  type ProjectActionsController,
+} from "@/hooks/use-project-actions";
 
-const ProjectDialogsContext = createContext<ProjectDialogsController | null>(
+const ProjectDialogsContext = createContext<ProjectActionsController | null>(
   null
 );
 
@@ -19,7 +19,7 @@ const ProjectDialogsContext = createContext<ProjectDialogsController | null>(
  * because the two entry points sit on opposite sides of the route boundary —
  * the sidebar lives in the layout, the `New Project` button lives in the page.
  */
-export function useProjectDialogActions(): ProjectDialogsController {
+export function useProjectDialogActions(): ProjectActionsController {
   const controller = useContext(ProjectDialogsContext);
 
   if (!controller) {
@@ -36,7 +36,7 @@ interface ProjectDialogsProviderProps {
 }
 
 /**
- * Holds the one `useProjectDialogs()` controller for the editor and renders all
+ * Holds the one `useProjectActions()` controller for the editor and renders all
  * three dialogs beside `children`, so they mount once no matter how many places
  * can open them.
  *
@@ -47,7 +47,7 @@ interface ProjectDialogsProviderProps {
 export function ProjectDialogsProvider({
   children,
 }: ProjectDialogsProviderProps) {
-  const dialogs = useProjectDialogs();
+  const dialogs = useProjectActions();
   const targetName = dialogs.target?.name ?? "";
 
   return (
@@ -57,10 +57,11 @@ export function ProjectDialogsProvider({
       <CreateProjectDialog
         open={dialogs.kind === "create"}
         name={dialogs.name}
-        slug={dialogs.slug}
+        roomId={dialogs.roomId}
         isSubmitting={dialogs.isSubmitting}
         canSubmit={dialogs.canSubmit}
         nameError={dialogs.nameError}
+        submitError={dialogs.submitError}
         onNameChange={dialogs.setName}
         onOpenChange={(open) => {
           if (!open) {
@@ -77,6 +78,7 @@ export function ProjectDialogsProvider({
         isSubmitting={dialogs.isSubmitting}
         canSubmit={dialogs.canSubmit}
         nameError={dialogs.nameError}
+        submitError={dialogs.submitError}
         onNameChange={dialogs.setName}
         onOpenChange={(open) => {
           if (!open) {
@@ -91,6 +93,7 @@ export function ProjectDialogsProvider({
         projectName={targetName}
         isSubmitting={dialogs.isSubmitting}
         canSubmit={dialogs.canSubmit}
+        submitError={dialogs.submitError}
         onOpenChange={(open) => {
           if (!open) {
             dialogs.close();

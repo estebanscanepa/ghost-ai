@@ -1,6 +1,7 @@
 "use client";
 
 import { FolderOpen, Pencil, Plus, Trash2, Users, X } from "lucide-react";
+import Link from "next/link";
 
 import { useProjectDialogActions } from "@/components/editor/project-dialogs";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,10 @@ import type { Project } from "@/types/project";
 interface ProjectSidebarProps {
   isOpen: boolean;
   onClose: () => void;
-  projects: Project[];
+  /** Projects the user owns. Fetched server-side; both lists arrive as props. */
+  ownedProjects: Project[];
+  /** Projects shared with the user by a collaborator invite. */
+  sharedProjects: Project[];
 }
 
 interface EmptyStateProps {
@@ -36,6 +40,7 @@ function EmptyState({ icon, title, description }: EmptyStateProps) {
 
 interface ProjectListItemProps {
   project: Project;
+  onOpen: () => void;
   onRename: (project: Project) => void;
   onDelete: (project: Project) => void;
 }
@@ -46,6 +51,7 @@ interface ProjectListItemProps {
  */
 function ProjectListItem({
   project,
+  onOpen,
   onRename,
   onDelete,
 }: ProjectListItemProps) {
@@ -53,11 +59,15 @@ function ProjectListItem({
 
   return (
     <li className="flex items-center gap-1 rounded-xl px-2 py-2 transition-colors hover:bg-subtle">
-      {/* Name only. The slug is a URL detail — it surfaces in the Create
-          Project dialog's preview, not in the list. */}
-      <p className="min-w-0 flex-1 truncate text-sm text-copy-primary">
+      {/* Name only. The ID is a URL detail — it surfaces in the Create Project
+          dialog's room ID preview, not in the list. */}
+      <Link
+        href={`/editor/${project.id}`}
+        onClick={onOpen}
+        className="min-w-0 flex-1 truncate text-sm text-copy-primary"
+      >
         {project.name}
-      </p>
+      </Link>
 
       {isOwned ? (
         <div className="flex shrink-0 items-center gap-0.5">
@@ -91,16 +101,10 @@ function ProjectListItem({
 export function ProjectSidebar({
   isOpen,
   onClose,
-  projects,
+  ownedProjects,
+  sharedProjects,
 }: ProjectSidebarProps) {
   const { openCreate, openRename, openDelete } = useProjectDialogActions();
-
-  const ownedProjects = projects.filter(
-    (project) => project.ownership === "owned"
-  );
-  const sharedProjects = projects.filter(
-    (project) => project.ownership === "shared"
-  );
 
   return (
     <aside
@@ -136,6 +140,7 @@ export function ProjectSidebar({
                 <ProjectListItem
                   key={project.id}
                   project={project}
+                  onOpen={onClose}
                   onRename={openRename}
                   onDelete={openDelete}
                 />
@@ -157,6 +162,7 @@ export function ProjectSidebar({
                 <ProjectListItem
                   key={project.id}
                   project={project}
+                  onOpen={onClose}
                   onRename={openRename}
                   onDelete={openDelete}
                 />

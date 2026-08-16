@@ -1,5 +1,6 @@
 "use client";
 
+import { DialogError } from "@/components/editor/dialogs/dialog-error";
 import { EditorDialog } from "@/components/editor/editor-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,32 +10,35 @@ const FORM_ID = "create-project-form";
 interface CreateProjectDialogProps {
   open: boolean;
   name: string;
-  /** Live preview of the slug the name will produce. */
-  slug: string;
+  /** Live preview of the room ID the name will produce — also the project ID. */
+  roomId: string;
   isSubmitting: boolean;
   canSubmit: boolean;
   /** Why the name is rejected, or `null` when it is fine. */
   nameError: string | null;
+  /** Why the last create attempt failed, or `null`. */
+  submitError: string | null;
   onNameChange: (name: string) => void;
   onOpenChange: (open: boolean) => void;
   onSubmit: () => void;
 }
 
 /**
- * Names a new project and previews the slug that name will produce. The body is
- * a `<form id>` and the footer's confirm button carries `form={FORM_ID}`,
+ * Names a new project and previews the room ID that name will produce. The body
+ * is a `<form id>` and the footer's confirm button carries `form={FORM_ID}`,
  * because `EditorDialog` renders body and footer as siblings — that pairing is
  * what makes Enter submit from inside the input.
  *
- * Presentational: every value and callback comes from `useProjectDialogs()`.
+ * Presentational: every value and callback comes from `useProjectActions()`.
  */
 export function CreateProjectDialog({
   open,
   name,
-  slug,
+  roomId,
   isSubmitting,
   canSubmit,
   nameError,
+  submitError,
   onNameChange,
   onOpenChange,
   onSubmit,
@@ -83,20 +87,22 @@ export function CreateProjectDialog({
           autoComplete="off"
           disabled={isSubmitting}
           aria-invalid={nameError !== null}
-          aria-describedby="create-project-slug"
+          aria-describedby="create-project-room-id"
         />
         {nameError ? (
-          <p id="create-project-slug" className="text-xs text-error">
+          <p id="create-project-room-id" className="text-xs text-error">
             {nameError}
           </p>
         ) : (
-          <p id="create-project-slug" className="text-xs text-copy-muted">
-            Slug:{" "}
+          <p id="create-project-room-id" className="text-xs text-copy-muted">
+            Room ID:{" "}
             <span className="font-mono text-copy-secondary">
-              {slug || "your-project"}
+              {roomId || "your-project"}
             </span>
           </p>
         )}
+
+        <DialogError message={submitError} />
       </form>
     </EditorDialog>
   );

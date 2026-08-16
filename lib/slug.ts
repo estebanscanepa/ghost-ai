@@ -1,7 +1,7 @@
 /**
- * Turns a project name into a URL-safe slug. Used for the live preview in the
- * Create Project dialog; the server will need to run the same transform (plus
- * uniqueness) once projects are persisted.
+ * Turns a project name into a URL-safe slug. It is the readable half of a room
+ * ID — see `lib/room-id.ts`, which appends the unique suffix and owns the
+ * format the server validates.
  */
 export function slugify(value: string): string {
   return value

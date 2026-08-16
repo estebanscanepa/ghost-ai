@@ -5,11 +5,14 @@ import { useState } from "react";
 import { EditorNavbar } from "@/components/editor/editor-navbar";
 import { ProjectDialogsProvider } from "@/components/editor/project-dialogs";
 import { ProjectSidebar } from "@/components/editor/project-sidebar";
-import { MOCK_PROJECTS } from "@/lib/mock-projects";
 import { cn } from "@/lib/utils";
+import type { Project } from "@/types/project";
 
 interface EditorShellProps {
   children: React.ReactNode;
+  /** Fetched in the route layout — the sidebar never fetches for itself. */
+  ownedProjects: Project[];
+  sharedProjects: Project[];
 }
 
 /**
@@ -24,7 +27,11 @@ interface EditorShellProps {
  * `ProjectDialogsProvider` wraps everything because both the sidebar (in the
  * layout) and the `New Project` button (in the page) open the same dialogs.
  */
-export function EditorShell({ children }: EditorShellProps) {
+export function EditorShell({
+  children,
+  ownedProjects,
+  sharedProjects,
+}: EditorShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
@@ -52,7 +59,8 @@ export function EditorShell({ children }: EditorShellProps) {
           <ProjectSidebar
             isOpen={isSidebarOpen}
             onClose={() => setIsSidebarOpen(false)}
-            projects={MOCK_PROJECTS}
+            ownedProjects={ownedProjects}
+            sharedProjects={sharedProjects}
           />
           {children}
         </main>
