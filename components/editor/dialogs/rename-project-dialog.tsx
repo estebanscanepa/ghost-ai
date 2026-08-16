@@ -1,5 +1,6 @@
 "use client";
 
+import { DialogError } from "@/components/editor/dialogs/dialog-error";
 import { EditorDialog } from "@/components/editor/editor-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,8 @@ interface RenameProjectDialogProps {
   canSubmit: boolean;
   /** Why the name is rejected, or `null` when it is fine. */
   nameError: string | null;
+  /** Why the last rename attempt failed, or `null`. */
+  submitError: string | null;
   onNameChange: (name: string) => void;
   onOpenChange: (open: boolean) => void;
   onSubmit: () => void;
@@ -36,6 +39,7 @@ export function RenameProjectDialog({
   isSubmitting,
   canSubmit,
   nameError,
+  submitError,
   onNameChange,
   onOpenChange,
   onSubmit,
@@ -91,6 +95,8 @@ export function RenameProjectDialog({
             {nameError}
           </p>
         ) : null}
+
+        <DialogError message={submitError} />
       </form>
     </EditorDialog>
   );
