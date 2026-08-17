@@ -29,8 +29,17 @@ function chunk<T>(items: T[], size: number): T[][] {
   return batches;
 }
 
-/** `fullName` is `null` when neither name field is set, so the username is the next best label. */
-function toProfile(user: User): ClerkProfile {
+/**
+ * `fullName` is `null` when neither name field is set, so the username is the
+ * next best label.
+ *
+ * Exported because the same derivation has to hold for the caller's *own*
+ * account — `getCurrentIdentity()` builds the profile that goes into a
+ * Liveblocks session token from here, so the name a user sees on their own
+ * cursor and the name collaborators see in the share dialog are computed the
+ * same way.
+ */
+export function toClerkProfile(user: User): ClerkProfile {
   return {
     name: user.fullName ?? user.username ?? null,
     imageUrl: user.imageUrl.length > 0 ? user.imageUrl : null,
@@ -68,7 +77,7 @@ export async function findClerkProfilesByEmail(
       });
 
       for (const user of data) {
-        const profile = toProfile(user);
+        const profile = toClerkProfile(user);
 
         for (const address of user.emailAddresses) {
           if (address.verification?.status !== "verified") {

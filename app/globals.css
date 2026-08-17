@@ -151,6 +151,36 @@
     background-color: var(--bg-base);
 }
 
+/* ---------------------------------------------------------------------------
+   React Flow, re-pointed at the project palette.
+
+   The library ships light defaults plus a `.react-flow.dark` block of its own
+   greys, neither of which is this app's palette — its dark canvas is `#141414`
+   where `--bg-base` is `#080809`. Overriding its `--xy-*` variables is the
+   library's own theming seam, and it keeps the hex values out of the component.
+
+   Three classes deep (`.react-flow.dark.canvas-surface`) so this wins over
+   `.react-flow.dark` on specificity rather than on source order: React Flow's
+   stylesheet is imported from a component, so which of the two lands later in
+   the bundle is not something this file can rely on.
+
+   Only what the canvas renders today is themed. Edge, handle, and node
+   colours arrive with the custom node and edge renderers.
+   --------------------------------------------------------------------------- */
+.react-flow.dark.canvas-surface {
+    --xy-background-color-default: var(--bg-base);
+    --xy-background-pattern-dots-color-default: var(--text-faint);
+
+    --xy-minimap-background-color-default: var(--bg-surface);
+    --xy-minimap-mask-background-color-default: color-mix(
+        in srgb,
+        var(--bg-base) 65%,
+        transparent
+    );
+    --xy-minimap-mask-stroke-color-default: var(--border-default);
+    --xy-minimap-node-background-color-default: var(--border-subtle);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
