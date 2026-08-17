@@ -68,7 +68,7 @@ export function useProjectActions(): ProjectActionsController {
 
   /** The workspace currently open, if the route is one. Deleting it has to redirect rather than refresh. */
   const activeProjectId =
-    typeof params.projectId === "string" ? params.projectId : null;
+    typeof params.roomId === "string" ? params.roomId : null;
 
   const roomId = useMemo(() => buildRoomId(name, suffix), [name, suffix]);
 

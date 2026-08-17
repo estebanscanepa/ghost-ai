@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useParams } from "next/navigation";
+import { useMemo, useState } from "react";
 
+import { AiSidebar } from "@/components/editor/ai-sidebar";
+import { ShareProjectDialog } from "@/components/editor/dialogs/share-project-dialog";
 import { EditorNavbar } from "@/components/editor/editor-navbar";
 import { ProjectDialogsProvider } from "@/components/editor/project-dialogs";
 import { ProjectSidebar } from "@/components/editor/project-sidebar";
+import { useShareDialog } from "@/hooks/use-share-dialog";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/types/project";
 
@@ -20,8 +24,8 @@ interface EditorShellProps {
  * between the navbar toggle and the sidebar itself, so the state has to live
  * above both — but the route layout should stay a Server Component.
  *
- * The `<main>` is `relative` on purpose: `ProjectSidebar` positions itself
- * absolutely against it so opening the panel overlays the canvas instead of
+ * The `<main>` is `relative` on purpose: both sidebars position themselves
+ * absolutely against it, so opening either overlays the canvas instead of
  * reflowing it.
  *
  * `ProjectDialogsProvider` wraps everything because both the sidebar (in the
@@ -32,7 +36,40 @@ export function EditorShell({
   ownedProjects,
   sharedProjects,
 }: EditorShellProps) {
+  const params = useParams();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // Open by default, unlike the project sidebar: the AI panel is part of what
+  // the workspace *is*, so a project opens onto the full three-column shell
+  // rather than hiding a third of it behind a toggle.
+  const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(true);
+
+  const activeRoomId = typeof params.roomId === "string" ? params.roomId : null;
+
+  /**
+   * The open project, resolved from the lists the layout already fetched
+   * rather than from a second query. A project the caller can open is in one
+   * of the two lists by definition, so a miss means the route is the editor
+   * home or the room was denied — in both cases there is no title to show.
+   */
+  const activeProject = useMemo(() => {
+    if (!activeRoomId) {
+      return null;
+    }
+
+    return (
+      ownedProjects.find((project) => project.id === activeRoomId) ??
+      sharedProjects.find((project) => project.id === activeRoomId) ??
+      null
+    );
+  }, [activeRoomId, ownedProjects, sharedProjects]);
+
+  /**
+   * The share dialog is owned here rather than published through
+   * `ProjectDialogsProvider`: the navbar is its only entry point, and it acts on
+   * the open project instead of on a row the user picked, so there is nothing
+   * for a second caller to pass.
+   */
+  const share = useShareDialog(activeProject);
 
   return (
     <ProjectDialogsProvider>
@@ -40,6 +77,10 @@ export function EditorShell({
         <EditorNavbar
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
+          project={activeProject}
+          onOpenShare={share.open}
+          isAiSidebarOpen={isAiSidebarOpen}
+          onToggleAiSidebar={() => setIsAiSidebarOpen((open) => !open)}
         />
 
         <main className="relative min-h-0 flex-1 overflow-hidden">
@@ -61,9 +102,49 @@ export function EditorShell({
             onClose={() => setIsSidebarOpen(false)}
             ownedProjects={ownedProjects}
             sharedProjects={sharedProjects}
+            activeProjectId={activeRoomId}
           />
           {children}
+
+          {/* Only mounted with a project open: there is nothing for the
+              assistant to act on from the editor home. */}
+          {activeProject ? (
+            <AiSidebar
+              isOpen={isAiSidebarOpen}
+              onClose={() => setIsAiSidebarOpen(false)}
+            />
+          ) : null}
         </main>
+
+        {/* Mounted only with a project open, for the same reason as the navbar's
+            share button: there is nothing to share from the editor home. */}
+        {activeProject ? (
+          <ShareProjectDialog
+            open={share.isOpen}
+            projectName={activeProject.name}
+            canManage={activeProject.ownership === "owned"}
+            collaborators={share.collaborators}
+            isLoading={share.isLoading}
+            loadError={share.loadError}
+            email={share.email}
+            canInvite={share.canInvite}
+            isInviting={share.isInviting}
+            inviteError={share.inviteError}
+            removingId={share.removingId}
+            removeError={share.removeError}
+            isLinkCopied={share.isLinkCopied}
+            copyError={share.copyError}
+            onEmailChange={share.setEmail}
+            onOpenChange={(open) => {
+              if (!open) {
+                share.close();
+              }
+            }}
+            onInvite={share.invite}
+            onRemove={share.remove}
+            onCopyLink={share.copyLink}
+          />
+        ) : null}
       </div>
     </ProjectDialogsProvider>
   );

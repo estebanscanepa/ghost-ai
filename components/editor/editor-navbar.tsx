@@ -1,23 +1,44 @@
 "use client";
 
 import { UserButton } from "@clerk/nextjs";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import {
+  PanelLeftClose,
+  PanelLeftOpen,
+  Share2,
+  Sparkles,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import type { Project } from "@/types/project";
 
 interface EditorNavbarProps {
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
+  /**
+   * The project whose workspace is open, or `null` on the editor home. It is
+   * what the title and the project-scoped actions render from — there is
+   * nothing to share or to design against without one.
+   */
+  project: Project | null;
+  /** Opens the share dialog for the project above. */
+  onOpenShare: () => void;
+  isAiSidebarOpen: boolean;
+  onToggleAiSidebar: () => void;
 }
 
 /**
  * Top chrome for every editor screen. Fixed height so the canvas below it can
- * claim the remaining viewport. The center section is an intentionally empty
- * placeholder for later chapters; the right section holds Clerk's account menu.
+ * claim the remaining viewport. The centre names the open project; the right
+ * section holds the project actions and Clerk's account menu.
  */
 export function EditorNavbar({
   isSidebarOpen,
   onToggleSidebar,
+  project,
+  onOpenShare,
+  isAiSidebarOpen,
+  onToggleAiSidebar,
 }: EditorNavbarProps) {
   const ToggleIcon = isSidebarOpen ? PanelLeftClose : PanelLeftOpen;
 
@@ -34,9 +55,43 @@ export function EditorNavbar({
         </Button>
       </div>
 
-      <div className="flex flex-1 items-center justify-center" />
+      <div className="flex min-w-0 flex-1 items-center justify-center px-2">
+        {project ? (
+          <h1 className="truncate text-sm font-medium text-copy-primary">
+            {project.name}
+          </h1>
+        ) : null}
+      </div>
 
       <div className="flex flex-1 items-center justify-end gap-2">
+        {project ? (
+          <>
+            {/* Rendered for collaborators too: they get the dialog read-only,
+                which is where they can see who else has access. */}
+            <Button variant="outline" size="sm" onClick={onOpenShare}>
+              <Share2 className="h-4 w-4" />
+              Share
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggleAiSidebar}
+              aria-pressed={isAiSidebarOpen}
+              aria-label={
+                isAiSidebarOpen ? "Hide AI sidebar" : "Show AI sidebar"
+              }
+            >
+              <Sparkles
+                className={cn(
+                  "h-5 w-5",
+                  isAiSidebarOpen ? "text-ai-text" : "text-copy-secondary",
+                )}
+              />
+            </Button>
+          </>
+        ) : null}
+
         <UserButton />
       </div>
     </header>

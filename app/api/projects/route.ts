@@ -1,10 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-import { Prisma } from "@/app/generated/prisma/client";
 import { readJsonObject } from "@/lib/api-request";
 import { conflict, invalidRequest, unauthorized } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
+import { isUniqueConstraintViolation } from "@/lib/prisma-errors";
 import {
   listOwnedProjects,
   parseCreateProjectId,
@@ -12,9 +12,6 @@ import {
   serializeProject,
 } from "@/lib/projects";
 import type { ProjectResponse } from "@/types/project";
-
-/** Prisma's unique constraint violation — here, a project ID that is already taken. */
-const UNIQUE_CONSTRAINT = "P2002";
 
 /** List the projects owned by the current user, newest first. */
 export async function GET() {
@@ -73,10 +70,7 @@ export async function POST(request: Request) {
   } catch (error) {
     // The client picks the ID, so a collision is a client-fixable condition
     // (retry with a fresh suffix) rather than a server fault.
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === UNIQUE_CONSTRAINT
-    ) {
+    if (isUniqueConstraintViolation(error)) {
       return conflict("That project ID is already taken.");
     }
 

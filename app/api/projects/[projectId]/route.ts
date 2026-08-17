@@ -2,14 +2,24 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { readJsonObject } from "@/lib/api-request";
-import { invalidRequest, unauthorized } from "@/lib/api-response";
+import { invalidRequest, notFound, unauthorized } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
+import { isMissingRecord } from "@/lib/prisma-errors";
 import {
   ensureProjectOwner,
   parseRenameProjectName,
   serializeProject,
 } from "@/lib/projects";
 import type { ProjectResponse } from "@/types/project";
+
+/*
+ * `ensureProjectOwner` reads and the mutation writes, so a project deleted in
+ * the gap between them would otherwise surface as an unhandled 500. Both
+ * mutations scope their `where` to `ownerId` as well, which makes the write
+ * itself atomic — the ownership check can no longer go stale between the two
+ * statements — and leaves `isMissingRecord` to translate the resulting `P2025`
+ * into the `404` the caller would have gotten a moment earlier.
+ */
 
 /** Rename a project. Owner only. */
 export async function PATCH(
@@ -41,14 +51,22 @@ export async function PATCH(
     return denied;
   }
 
-  const project = await prisma.project.update({
-    where: { id: projectId },
-    data: { name: name.name },
-  });
+  try {
+    const project = await prisma.project.update({
+      where: { id: projectId, ownerId: userId },
+      data: { name: name.name },
+    });
 
-  return NextResponse.json<{ project: ProjectResponse }>({
-    project: serializeProject(project),
-  });
+    return NextResponse.json<{ project: ProjectResponse }>({
+      project: serializeProject(project),
+    });
+  } catch (error) {
+    if (isMissingRecord(error)) {
+      return notFound("Project not found.");
+    }
+
+    throw error;
+  }
 }
 
 /** Delete a project. Owner only. Collaborators cascade away with it. */
@@ -69,9 +87,19 @@ export async function DELETE(
     return denied;
   }
 
-  const project = await prisma.project.delete({ where: { id: projectId } });
+  try {
+    const project = await prisma.project.delete({
+      where: { id: projectId, ownerId: userId },
+    });
 
-  return NextResponse.json<{ project: ProjectResponse }>({
-    project: serializeProject(project),
-  });
+    return NextResponse.json<{ project: ProjectResponse }>({
+      project: serializeProject(project),
+    });
+  } catch (error) {
+    if (isMissingRecord(error)) {
+      return notFound("Project not found.");
+    }
+
+    throw error;
+  }
 }
