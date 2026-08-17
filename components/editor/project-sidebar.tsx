@@ -16,6 +16,8 @@ interface ProjectSidebarProps {
   ownedProjects: Project[];
   /** Projects shared with the user by a collaborator invite. */
   sharedProjects: Project[];
+  /** The room whose workspace is open, so its row can be marked current. */
+  activeProjectId: string | null;
 }
 
 interface EmptyStateProps {
@@ -40,6 +42,8 @@ function EmptyState({ icon, title, description }: EmptyStateProps) {
 
 interface ProjectListItemProps {
   project: Project;
+  /** True for the room currently open in the workspace. */
+  isActive: boolean;
   onOpen: () => void;
   onRename: (project: Project) => void;
   onDelete: (project: Project) => void;
@@ -51,6 +55,7 @@ interface ProjectListItemProps {
  */
 function ProjectListItem({
   project,
+  isActive,
   onOpen,
   onRename,
   onDelete,
@@ -58,13 +63,22 @@ function ProjectListItem({
   const isOwned = project.ownership === "owned";
 
   return (
-    <li className="flex items-center gap-1 rounded-xl px-2 py-2 transition-colors hover:bg-subtle">
+    <li
+      className={cn(
+        "flex items-center gap-1 rounded-xl px-2 py-2 transition-colors",
+        isActive ? "bg-accent-dim" : "hover:bg-subtle"
+      )}
+    >
       {/* Name only. The ID is a URL detail — it surfaces in the Create Project
           dialog's room ID preview, not in the list. */}
       <Link
         href={`/editor/${project.id}`}
         onClick={onOpen}
-        className="min-w-0 flex-1 truncate text-sm text-copy-primary"
+        aria-current={isActive ? "page" : undefined}
+        className={cn(
+          "min-w-0 flex-1 truncate text-sm",
+          isActive ? "font-medium text-brand" : "text-copy-primary"
+        )}
       >
         {project.name}
       </Link>
@@ -103,6 +117,7 @@ export function ProjectSidebar({
   onClose,
   ownedProjects,
   sharedProjects,
+  activeProjectId,
 }: ProjectSidebarProps) {
   const { openCreate, openRename, openDelete } = useProjectDialogActions();
 
@@ -140,6 +155,7 @@ export function ProjectSidebar({
                 <ProjectListItem
                   key={project.id}
                   project={project}
+                  isActive={project.id === activeProjectId}
                   onOpen={onClose}
                   onRename={openRename}
                   onDelete={openDelete}
@@ -162,6 +178,7 @@ export function ProjectSidebar({
                 <ProjectListItem
                   key={project.id}
                   project={project}
+                  isActive={project.id === activeProjectId}
                   onOpen={onClose}
                   onRename={openRename}
                   onDelete={openDelete}

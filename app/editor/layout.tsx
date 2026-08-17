@@ -1,7 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
-
 import { EditorShell } from "@/components/editor/editor-shell";
-import { getCurrentUserEmails } from "@/lib/current-user";
+import { getCurrentIdentity } from "@/lib/project-access";
 import {
   listOwnedProjects,
   listSharedProjects,
@@ -21,16 +19,14 @@ import {
 export default async function EditorLayout({
   children,
 }: LayoutProps<"/editor">) {
-  const { userId } = await auth();
-
   // `proxy.ts` already blocks signed-out requests; this keeps the query honest
   // rather than trusting that.
-  const emails = userId ? await getCurrentUserEmails() : [];
+  const identity = await getCurrentIdentity();
 
-  const [owned, shared] = userId
+  const [owned, shared] = identity
     ? await Promise.all([
-        listOwnedProjects(userId),
-        listSharedProjects(userId, emails),
+        listOwnedProjects(identity.userId),
+        listSharedProjects(identity.userId, identity.emails),
       ])
     : [[], []];
 

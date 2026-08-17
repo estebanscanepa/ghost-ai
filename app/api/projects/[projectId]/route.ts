@@ -1,10 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-import { Prisma } from "@/app/generated/prisma/client";
 import { readJsonObject } from "@/lib/api-request";
 import { invalidRequest, notFound, unauthorized } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
+import { isMissingRecord } from "@/lib/prisma-errors";
 import {
   ensureProjectOwner,
   parseRenameProjectName,
@@ -12,23 +12,14 @@ import {
 } from "@/lib/projects";
 import type { ProjectResponse } from "@/types/project";
 
-/** Prisma's "no record matched" — here, the project vanished mid-request. */
-const MISSING_RECORD = "P2025";
-
-/**
+/*
  * `ensureProjectOwner` reads and the mutation writes, so a project deleted in
  * the gap between them would otherwise surface as an unhandled 500. Both
  * mutations scope their `where` to `ownerId` as well, which makes the write
  * itself atomic — the ownership check can no longer go stale between the two
- * statements — and leaves this to translate the resulting `P2025` into the
- * `404` the caller would have gotten a moment earlier.
+ * statements — and leaves `isMissingRecord` to translate the resulting `P2025`
+ * into the `404` the caller would have gotten a moment earlier.
  */
-function isMissingRecord(error: unknown): boolean {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === MISSING_RECORD
-  );
-}
 
 /** Rename a project. Owner only. */
 export async function PATCH(

@@ -6,11 +6,22 @@ import { slugify } from "@/lib/slug";
  * it, and sends it as the project ID — so the room the canvas joins is always
  * addressable from the project record and vice versa.
  *
- * Shape: `slugified-name-<suffix>`, e.g. `checkout-platform-4f2a91`.
+ * Shape: `slugified-name-<suffix>`, e.g. `checkout-platform-4f2a91c83d5e`.
  */
 
-/** Three random bytes rendered as hex — six characters, enough to keep two projects with the same name apart. */
-const ROOM_SUFFIX_BYTES = 3;
+/**
+ * Six random bytes rendered as hex — twelve characters, 48 bits.
+ *
+ * Sized against the birthday bound, because the suffix only has to separate
+ * projects that slugify to the *same* name: at 24 bits, two such projects
+ * collide with probability ~50% after about 4.8k of them and ~1-in-a-million
+ * after only ~6k, which puts a `409` on the routine path. A `409` is recoverable
+ * but not automatic — the create dialog rolls a fresh suffix and shows the
+ * error, and the user has to submit again — so the right fix is to make the
+ * collision unreachable rather than to paper over it with a retry. 48 bits moves
+ * the 50% point to ~19.7M same-named projects.
+ */
+const ROOM_SUFFIX_BYTES = 6;
 
 /** The column is an unbounded `String`; this keeps a 100-character name from producing an unbounded key. */
 export const ROOM_ID_MAX_LENGTH = 120;
@@ -22,7 +33,9 @@ const ROOM_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
  * A short unique suffix for a new room. Uses the platform CSPRNG rather than
  * `Math.random` so two clients naming a project the same thing at the same
  * moment do not collide — and if they somehow do, the primary key rejects the
- * second one.
+ * second one. Widening this is safe: `isRoomId` checks shape and a maximum
+ * length, never the suffix's length, so IDs already issued at six characters
+ * stay valid and need no migration.
  */
 export function createRoomSuffix(): string {
   const bytes = new Uint8Array(ROOM_SUFFIX_BYTES);

@@ -3,12 +3,26 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+// Relative, not the `@/` alias: this file is loaded by the Prisma CLI's own
+// TypeScript loader, which does not read the tsconfig path mappings Next uses.
+import { assertVerifiedDatabaseUrl } from "./lib/database-url";
+
+const url = process.env["DATABASE_URL"];
+
+// The CLI opens its own connections — `migrate deploy`, `db execute`, `studio` —
+// so the policy `lib/prisma.ts` enforces for the app has to hold here too.
+// Without this, a migration could be applied over a connection whose certificate
+// and hostname went unverified, against a database the app itself would refuse to
+// open. An unset URL passes: `prisma generate` and `prisma validate` need no
+// database, and failing here would break a fresh clone.
+assertVerifiedDatabaseUrl(url);
+
 export default defineConfig({
   schema: "prisma/",
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url,
   },
 });

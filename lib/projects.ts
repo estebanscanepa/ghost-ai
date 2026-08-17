@@ -140,38 +140,6 @@ export function listSharedProjects(
 }
 
 /**
- * The project behind a workspace URL, or `null` when the caller may not open
- * it. Read access is owner-or-collaborator per the auth model; mutations are
- * still owner-only and check separately.
- */
-export async function findAccessibleProject(
-  projectId: string,
-  userId: string,
-  emails: string[],
-): Promise<{ project: ProjectModel; ownership: ProjectOwnership } | null> {
-  const project = await prisma.project.findUnique({ where: { id: projectId } });
-
-  if (!project) {
-    return null;
-  }
-
-  if (project.ownerId === userId) {
-    return { project, ownership: "owned" };
-  }
-
-  if (emails.length === 0) {
-    return null;
-  }
-
-  const collaborator = await prisma.projectCollaborator.findFirst({
-    where: { projectId, email: { in: emails } },
-    select: { id: true },
-  });
-
-  return collaborator ? { project, ownership: "shared" } : null;
-}
-
-/**
  * Invariant 3 in `architecture-context.md`: ownership is enforced at every
  * mutation boundary. Returns the response to send when the caller may not
  * proceed, or `null` when they own the project. A project that exists but
