@@ -23,20 +23,20 @@ function CustomThread({ thread }: { thread: ThreadData }) {
             comment={comment}
             avatar={
               <div className="custom-avatar">
-                <Comment.Avatar userId={props.comment.userId} />
+                <Comment.Avatar userId={comment.userId} />
                 <div className="custom-badge" />
               </div>
             }
             author={
               <span className="custom-author">
-                <Comment.Author userId={props.comment.userId} />
+                <Comment.Author userId={comment.userId} />
                 <span>Custom label</span>
               </span>
             }
             date={
               <span className="custom-date">
-                <Comment.Date date={props.comment.createdAt} />
-                {props.comment.editedAt && (
+                <Comment.Date date={comment.createdAt} />
+                {comment.editedAt && (
                   <span className="custom-edited-label">Edited</span>
                 )}
               </span>
@@ -67,7 +67,7 @@ function CustomThread({ thread }: { thread: ThreadData }) {
 ```
 
 Always prefer the method above. Don't customize your thread like this, as you
-will losing basic `Thread` functionality, such as unread message status:
+will lose basic `Thread` functionality, such as unread message status:
 
 ```tsx
 import { Comment } from "@liveblocks/react-ui";

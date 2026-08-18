@@ -6,7 +6,7 @@ title: "Authenticating with Access Tokens"
 
 Access tokens is a simpler method for authentication (the recommended method is
 ID tokens). Start this with
-[`identifyUser`](https://liveblocks.io/docs/api-reference/liveblocks-node#access-tokens),
+[`prepareSession`](https://liveblocks.io/docs/api-reference/liveblocks-node#access-tokens),
 before returning the `body` and `status` from your API endpoint.
 
 ```ts
@@ -37,8 +37,8 @@ export async function POST(request: Request) {
 
   // Use a naming pattern to allow access to rooms with wildcards
   // Giving the user read access on their org, and write access on their group
-  session.allow(`${user.organization}:*`, session.READ_ACCESS);
-  session.allow(`${user.organization}:${user.group}:*`, session.FULL_ACCESS);
+  session.allow(`${user.organization}:*`, ["*:read"]);
+  session.allow(`${user.organization}:${user.group}:*`, ["*:write"]);
 
   // Authorize the user and return the result
   const { status, body } = await session.authorize();

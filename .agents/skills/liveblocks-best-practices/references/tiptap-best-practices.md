@@ -97,7 +97,7 @@ Set `immediatelyRender: false` in your `useEditor` configuration:
 
 ```tsx
 // ✅ CORRECT: Disable server-side rendering for Next.js and other SSR frameworks
-import { useEditor } from "@tiptap/react";
+import { EditorContent, useEditor } from "@tiptap/react";
 import { useLiveblocksExtension } from "@liveblocks/react-tiptap";
 import StarterKit from "@tiptap/starter-kit";
 
@@ -410,18 +410,19 @@ tab or navigating away, enable the
 option:
 
 ```tsx
-import { RoomProvider } from "@liveblocks/react/suspense";
+import { LiveblocksProvider, RoomProvider } from "@liveblocks/react/suspense";
 
-<RoomProvider
-  id="my-room"
-  initialPresence={{}}
+<LiveblocksProvider
+  authEndpoint="/api/liveblocks-auth"
   // Warn users before they leave with unsaved changes
   // +++
   preventUnsavedChanges={true}
   // +++
 >
-  {/* Your components */}
-</RoomProvider>;
+  <RoomProvider id="my-room" initialPresence={{}}>
+    {/* Your components */}
+  </RoomProvider>
+</LiveblocksProvider>;
 ```
 
 This will display a browser confirmation dialog when users try to leave the page

@@ -29,7 +29,13 @@ Add a bottom shape panel so users can drag shapes onto the canvas and create new
    - use the default node color
    - use the dragged shape value
 
-6. Generate each node ID using the shape name, timestamp, and a counter.
+6. Generate each node ID using the shape name, a per-client-session
+   identifier, timestamp, and a counter.
+
+   The session identifier was not in this unit's original requirement and was
+   added later: shape + timestamp + counter alone collides between two clients
+   whose timestamps and counters agree, and a colliding ID silently overwrites
+   the earlier node rather than adding one. See `lib/canvas-nodes.ts`.
 
 7. Add a basic renderer for the custom canvas node type so new nodes are visible.
 

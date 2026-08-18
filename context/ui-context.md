@@ -183,6 +183,12 @@ event target is an `input`, `textarea`, `select`, or a `contenteditable` element
 
 `Cmd/Ctrl + -` is left to the browser as page zoom.
 
+The shape panel's items are the one keyboard surface bound locally rather than on
+`window`: they carry `role="button"`, so `Enter` and `Space` activate the focused
+item and add that shape at the centre of the pane. `Space` is `preventDefault`ed
+so it does not scroll the editor, and a held key is ignored — a native button does
+not repeat, and every node is a write to a document collaborators are watching.
+
 ### Canvas Background
 
 React Flow `<Background>` component. Canvas sits on the base background color.

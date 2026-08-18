@@ -73,7 +73,7 @@ function DesignSystemLink({ url, children }) {
 function Link({ href, children }: CommentBodyLinkProps) {
   return (
     <Comment.Link href={href} asChild>
-      {children}
+      <DesignSystemLink url={href}>{children}</DesignSystemLink>
     </Comment.Link>
   );
 }

@@ -18,8 +18,9 @@ import {
   type EdgeTypes,
   type IsValidConnection,
   type NodeTypes,
+  type XYPosition,
 } from "@xyflow/react";
-import { useCallback, type DragEvent } from "react";
+import { useCallback, useRef, type DragEvent } from "react";
 
 import { CanvasControls } from "@/components/canvas/canvas-controls";
 import { CanvasEdge } from "@/components/canvas/canvas-edge";
@@ -36,8 +37,11 @@ import {
   CANVAS_EDGE_TYPE,
   CANVAS_NODE_TYPE,
   DEFAULT_EDGE_OPTIONS,
+  NODE_SHAPE_SIZES,
   type CanvasEdge as CanvasEdgeType,
   type CanvasNode as CanvasNodeType,
+  type NodeShape,
+  type NodeSize,
 } from "@/types/canvas";
 
 import "@xyflow/react/dist/style.css";
@@ -89,6 +93,14 @@ export function CollaborativeCanvas() {
   const { screenToFlowPosition } = reactFlow;
 
   /**
+   * The canvas wrapper, measured to find the middle of the viewport when a shape
+   * is created from the keyboard. A ref rather than React Flow's store `width` /
+   * `height`, so the midpoint is in client coordinates and can go through
+   * `screenToFlowPosition` — the same conversion the drop path uses.
+   */
+  const paneRef = useRef<HTMLDivElement>(null);
+
+  /**
    * Undo and redo are the room's, not this component's. Every change to the
    * graph is already a write to Liveblocks Storage through `onNodesChange` /
    * `onEdgesChange`, so the room's history is the only record of what happened
@@ -134,11 +146,21 @@ export function CollaborativeCanvas() {
   }, []);
 
   /**
-   * The node is created through `onNodesChange` rather than by writing to
+   * The one way a node is added from the panel, whichever affordance asked for
+   * it. The node goes out through `onNodesChange` rather than by writing to
    * Storage directly: an `add` change is the controlled-flow way to introduce a
-   * node, so a drag-created node, a collaborator's node, and a node the AI
-   * writes all reach Storage down the same path.
+   * node, so a drag-created node, a keyboard-created node, a collaborator's
+   * node, and a node the AI writes all reach Storage down the same path.
    */
+  const addShapeNode = useCallback(
+    (shape: NodeShape, position: XYPosition, size: NodeSize) => {
+      onNodesChange([
+        { type: "add", item: createCanvasNode({ shape, position, size }) },
+      ]);
+    },
+    [onNodesChange],
+  );
+
   const handleDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
       const payload = readShapeDragPayload(event.dataTransfer);
@@ -152,14 +174,45 @@ export function CollaborativeCanvas() {
         y: event.clientY,
       });
 
-      onNodesChange([
-        {
-          type: "add",
-          item: createCanvasNode({ shape, position, size: { width, height } }),
-        },
-      ]);
+      addShapeNode(shape, position, { width, height });
     },
-    [onNodesChange, screenToFlowPosition],
+    [addShapeNode, screenToFlowPosition],
+  );
+
+  /**
+   * The keyboard equivalent of a drop, for the panel items — which carry
+   * `role="button"` and a tab stop but, until now, no way to be activated.
+   *
+   * A keystroke has no pointer position, so the drop's `event.clientX/Y` has to
+   * be replaced by something. The centre of the pane is the least surprising
+   * choice and the one `progress-tracker.md` already named: it is where the user
+   * is looking, and it is reachable at any zoom or pan. It goes through the same
+   * `screenToFlowPosition` the drop uses rather than arithmetic on the viewport
+   * transform, so both routes convert screen space to flow space one way.
+   *
+   * Half the footprint comes off each axis because React Flow reads `position`
+   * as a node's top-left corner — without it the node would be centred on its
+   * own corner and sit down and to the right of where it was asked for.
+   */
+  const handleCreateShape = useCallback(
+    (shape: NodeShape) => {
+      const pane = paneRef.current;
+      if (!pane) return;
+
+      const bounds = pane.getBoundingClientRect();
+      const size = NODE_SHAPE_SIZES[shape];
+      const centre = screenToFlowPosition({
+        x: bounds.left + bounds.width / 2,
+        y: bounds.top + bounds.height / 2,
+      });
+
+      addShapeNode(
+        shape,
+        { x: centre.x - size.width / 2, y: centre.y - size.height / 2 },
+        size,
+      );
+    },
+    [addShapeNode, screenToFlowPosition],
   );
 
   /**
@@ -230,6 +283,7 @@ export function CollaborativeCanvas() {
 
   return (
     <div
+      ref={paneRef}
       className="h-full w-full bg-base"
       onDragOver={handleDragOver}
       onDrop={handleDrop}
@@ -265,7 +319,7 @@ export function CollaborativeCanvas() {
         className="canvas-surface"
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-        <ShapePanel />
+        <ShapePanel onCreateShape={handleCreateShape} />
         {/* After `ShapePanel` so it layers above it: both are absolutely
             positioned panels with no z-index of their own, so document order is
             what decides which one wins where they meet on a narrow viewport. */}
