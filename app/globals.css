@@ -164,21 +164,154 @@
    stylesheet is imported from a component, so which of the two lands later in
    the bundle is not something this file can rely on.
 
-   Only what the canvas renders today is themed. Edge, handle, and node
-   colours arrive with the custom node and edge renderers.
+   Only what the canvas renders today is themed, and only what React Flow itself
+   draws: a node's own fill and text colour come from `NODE_COLORS` as inline
+   styles on `NodeShapeFrame`, and an edge's stroke and arrowhead come from
+   `DEFAULT_EDGE_OPTIONS` on the edge record, because both are serialized into
+   the canvas document where a `var(--…)` has nothing to resolve against.
    --------------------------------------------------------------------------- */
 .react-flow.dark.canvas-surface {
     --xy-background-color-default: var(--bg-base);
     --xy-background-pattern-dots-color-default: var(--text-faint);
 
-    --xy-minimap-background-color-default: var(--bg-surface);
-    --xy-minimap-mask-background-color-default: color-mix(
-        in srgb,
-        var(--bg-base) 65%,
-        transparent
-    );
-    --xy-minimap-mask-stroke-color-default: var(--border-default);
-    --xy-minimap-node-background-color-default: var(--border-subtle);
+    --xy-resize-background-color-default: var(--accent-primary);
+
+    /* Connection handles and the edges they produce. React Flow's dark defaults
+       are tuned for its own `#141414` canvas — `--xy-edge-stroke-default` is
+       `#3e3e3e`, which is all but invisible on `--bg-base` (`#080809`), so a
+       connector drawn with them would look like a bug. `ui-context.md` puts the
+       edge at `#f8fafc`; `--text-primary` (`#f0f0f4`) is the token that stands
+       for "near-white text-weight foreground" and is indistinguishable at a 1px
+       stroke, which keeps the hex out of the stylesheet per `code-standards.md`.
+
+       The edge strokes are now a fallback rather than the rule: a `canvasEdge`
+       carries its own stroke and arrowhead colour on the edge record, because a
+       marker's colour has to be a literal (see `CANVAS_EDGE_STROKE` in
+       `types/canvas.ts`, which is this same value). They still cover an edge
+       that reaches the canvas without a style of its own.
+
+       The line dragged out of a handle is the accent — the same cyan a selected
+       node's border uses, so "this is the thing you are acting on" reads the
+       same everywhere on the canvas. */
+    --xy-handle-background-color-default: var(--text-primary);
+    --xy-handle-border-color-default: var(--bg-base);
+    --xy-edge-stroke-default: var(--text-primary);
+    --xy-edge-stroke-selected-default: var(--accent-primary);
+    --xy-connectionline-stroke-default: var(--accent-primary);
+}
+
+/* `CanvasEdge` dims an edge at rest and brings it to full strength when it is
+   hovered, selected, or being labelled. The fade is here rather than inline
+   beside the opacity it animates, so the canvas has one timing: 120ms ease-out,
+   the same as the connection handles below. */
+.react-flow.dark.canvas-surface .react-flow__edge-path {
+    transition: opacity 120ms ease-out;
+}
+
+/* Connection handles: `ui-context.md` asks for small white circles on all four
+   sides, hidden by default and revealed on node hover. Selection reveals them
+   too, so a node you have clicked offers its connection points without having
+   to keep the pointer on it.
+
+   9px rather than the library's 6px. These are the one control on the canvas
+   that must be hit precisely — a resize can be started anywhere along an edge
+   line, but a connection starts at a point — and 6px is a hard target at a
+   zoomed-out viewport.
+
+   `pointer-events` is toggled with the reveal, not left on. React Flow's base
+   rule turns them on for any connectable handle, which would leave every node
+   ringed by four invisible grab targets that straddle its edge and steal drags
+   meant for the pane. Hover is enough to re-arm them because a handle is a DOM
+   child of `.react-flow__node`, so the pointer sitting on the half of a handle
+   that hangs outside the node still counts as hovering the node. */
+.react-flow.dark.canvas-surface .react-flow__handle {
+    width: 9px;
+    height: 9px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease-out;
+}
+
+/* `connectingfrom` / `connectingto` keep the two live ends of a drag visible
+   once the pointer has left the node it started on. */
+.react-flow.dark.canvas-surface .react-flow__node:hover .react-flow__handle,
+.react-flow.dark.canvas-surface .react-flow__node.selected .react-flow__handle,
+.react-flow.dark.canvas-surface .react-flow__handle.connectingfrom,
+.react-flow.dark.canvas-surface .react-flow__handle.connectingto {
+    opacity: 1;
+}
+
+.react-flow.dark.canvas-surface
+    .react-flow__node:hover
+    .react-flow__handle.connectionindicator,
+.react-flow.dark.canvas-surface
+    .react-flow__node.selected
+    .react-flow__handle.connectionindicator {
+    pointer-events: all;
+}
+
+/* Resize handles, which the `--xy-*` seam above only reaches as far as their
+   fill. Their 5px box and the `#fff` ring around it are literals in React
+   Flow's own stylesheet with no variable behind them, so those are restated
+   here: a small round dot ringed in the canvas background reads as a control
+   sitting on the node rather than a white speck on it.
+
+   Four classes deep, for the same reason as the block above — this has to beat
+   `.react-flow__resize-control.handle` on specificity, not on source order. */
+.react-flow.dark.canvas-surface .react-flow__resize-control.handle {
+    width: 7px;
+    height: 7px;
+    border-radius: 9999px;
+    border-color: var(--bg-base);
+}
+
+/* The edges between the corner handles. Dimmed rather than the full accent:
+   they trace the node's bounding box, which on a diamond or a hexagon is a
+   rectangle the shape does not have, and at full strength that box competes
+   with the outline it is measuring. */
+.react-flow.dark.canvas-surface .react-flow__resize-control.line {
+    border-color: color-mix(in srgb, var(--accent-primary) 35%, transparent);
+}
+
+/* ---------------------------------------------------------------------------
+   The node colour toolbar's swatches — see `components/canvas/
+   node-color-toolbar.tsx`.
+
+   Rules rather than utilities because both states are `box-shadow`s built from
+   the pair's own text colour, which is serialized hex in `types/canvas.ts` and
+   arrives on the element as `--swatch-accent`. Tailwind can only generate a
+   class for a colour it saw in the source, so there is nothing to hang a
+   `hover:` variant on here.
+
+   The glow is a 5px blur with no spread, per `15-nodes-color-toolbar.md`: on a
+   20px target anything wider stops reading as a glow and starts reading as a
+   smudge.
+   --------------------------------------------------------------------------- */
+.node-color-swatch {
+    transition: box-shadow 120ms ease-out;
+}
+
+.node-color-swatch:hover {
+    box-shadow: 0 0 5px 0 var(--swatch-accent);
+}
+
+/* The active swatch wears a ring in its own text colour, held off the swatch by
+   2px of the toolbar's own surface so it reads as a ring rather than a thicker
+   swatch. 3.5px total is inside the toolbar's 6px padding and its 6px gap, so a
+   ring never touches its neighbours or the pill's edge. */
+.node-color-swatch[data-active="true"] {
+    box-shadow:
+        0 0 0 2px var(--bg-elevated),
+        0 0 0 3.5px var(--swatch-accent);
+}
+
+/* Hovering the active swatch keeps the ring and adds the glow, rather than
+   replacing one with the other. */
+.node-color-swatch[data-active="true"]:hover {
+    box-shadow:
+        0 0 0 2px var(--bg-elevated),
+        0 0 0 3.5px var(--swatch-accent),
+        0 0 5px 1px var(--swatch-accent);
 }
 
 @layer base {

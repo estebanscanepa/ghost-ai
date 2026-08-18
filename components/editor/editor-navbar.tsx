@@ -2,12 +2,14 @@
 
 import { UserButton } from "@clerk/nextjs";
 import {
+  LayoutTemplate,
   PanelLeftClose,
   PanelLeftOpen,
   Share2,
   Sparkles,
 } from "lucide-react";
 
+import { useStarterTemplates } from "@/components/editor/starter-templates-provider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/types/project";
@@ -42,6 +44,14 @@ export function EditorNavbar({
 }: EditorNavbarProps) {
   const ToggleIcon = isSidebarOpen ? PanelLeftClose : PanelLeftOpen;
 
+  /**
+   * Read from context rather than taken as a prop, unlike `onOpenShare` beside
+   * it: the modal this opens is mounted by the canvas, inside the Liveblocks
+   * room, so the state has to cross the layout/page boundary. Same reason the
+   * project dialogs are reached that way — see `useStarterTemplates`.
+   */
+  const starterTemplates = useStarterTemplates();
+
   return (
     <header className="z-50 flex h-14 shrink-0 items-center border-b border-surface-border bg-surface px-3">
       <div className="flex flex-1 items-center gap-2">
@@ -49,7 +59,9 @@ export function EditorNavbar({
           variant="ghost"
           size="icon"
           onClick={onToggleSidebar}
-          aria-label={isSidebarOpen ? "Hide project sidebar" : "Show project sidebar"}
+          aria-label={
+            isSidebarOpen ? "Hide project sidebar" : "Show project sidebar"
+          }
         >
           <ToggleIcon className="h-5 w-5 text-copy-secondary" />
         </Button>
@@ -66,6 +78,19 @@ export function EditorNavbar({
       <div className="flex flex-1 items-center justify-end gap-2">
         {project ? (
           <>
+            {/* Ahead of Share, in the order the two are reached for: a template
+                is imported while a diagram is being started, and it is shared
+                once there is something on the canvas to share. */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={starterTemplates.open}
+              aria-expanded={starterTemplates.isOpen}
+            >
+              <LayoutTemplate className="h-4 w-4" />
+              Templates
+            </Button>
+
             {/* Rendered for collaborators too: they get the dialog read-only,
                 which is where they can see who else has access. */}
             <Button variant="outline" size="sm" onClick={onOpenShare}>
