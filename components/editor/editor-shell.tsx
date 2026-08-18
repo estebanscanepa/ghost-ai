@@ -8,6 +8,7 @@ import { ShareProjectDialog } from "@/components/editor/dialogs/share-project-di
 import { EditorNavbar } from "@/components/editor/editor-navbar";
 import { ProjectDialogsProvider } from "@/components/editor/project-dialogs";
 import { ProjectSidebar } from "@/components/editor/project-sidebar";
+import { StarterTemplatesProvider } from "@/components/editor/starter-templates-provider";
 import { useShareDialog } from "@/hooks/use-share-dialog";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/types/project";
@@ -30,6 +31,9 @@ interface EditorShellProps {
  *
  * `ProjectDialogsProvider` wraps everything because both the sidebar (in the
  * layout) and the `New Project` button (in the page) open the same dialogs.
+ * `StarterTemplatesProvider` wraps it for the mirror-image reason: the navbar
+ * button that opens the template picker is here, and the modal that answers it is
+ * mounted by the canvas in `{children}`, inside the Liveblocks room it writes to.
  */
 export function EditorShell({
   children,
@@ -73,79 +77,81 @@ export function EditorShell({
 
   return (
     <ProjectDialogsProvider>
-      <div className="flex h-dvh flex-col overflow-hidden bg-base">
-        <EditorNavbar
-          isSidebarOpen={isSidebarOpen}
-          onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
-          project={activeProject}
-          onOpenShare={share.open}
-          isAiSidebarOpen={isAiSidebarOpen}
-          onToggleAiSidebar={() => setIsAiSidebarOpen((open) => !open)}
-        />
+      <StarterTemplatesProvider>
+        <div className="flex h-dvh flex-col overflow-hidden bg-base">
+          <EditorNavbar
+            isSidebarOpen={isSidebarOpen}
+            onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
+            project={activeProject}
+            onOpenShare={share.open}
+            isAiSidebarOpen={isAiSidebarOpen}
+            onToggleAiSidebar={() => setIsAiSidebarOpen((open) => !open)}
+          />
 
-        <main className="relative min-h-0 flex-1 overflow-hidden">
-          {/* Mobile-only scrim: tapping outside the panel closes it. On wider
+          <main className="relative min-h-0 flex-1 overflow-hidden">
+            {/* Mobile-only scrim: tapping outside the panel closes it. On wider
               screens the sidebar overlays the canvas without blocking it. */}
-          <button
-            type="button"
-            inert={!isSidebarOpen}
-            aria-label="Close project sidebar"
-            onClick={() => setIsSidebarOpen(false)}
-            className={cn(
-              "absolute inset-0 z-20 bg-background/70 backdrop-blur-[2px] transition-opacity duration-200 md:hidden",
-              isSidebarOpen ? "opacity-100" : "pointer-events-none opacity-0"
-            )}
-          />
+            <button
+              type="button"
+              inert={!isSidebarOpen}
+              aria-label="Close project sidebar"
+              onClick={() => setIsSidebarOpen(false)}
+              className={cn(
+                "absolute inset-0 z-20 bg-background/70 backdrop-blur-[2px] transition-opacity duration-200 md:hidden",
+                isSidebarOpen ? "opacity-100" : "pointer-events-none opacity-0",
+              )}
+            />
 
-          <ProjectSidebar
-            isOpen={isSidebarOpen}
-            onClose={() => setIsSidebarOpen(false)}
-            ownedProjects={ownedProjects}
-            sharedProjects={sharedProjects}
-            activeProjectId={activeRoomId}
-          />
-          {children}
+            <ProjectSidebar
+              isOpen={isSidebarOpen}
+              onClose={() => setIsSidebarOpen(false)}
+              ownedProjects={ownedProjects}
+              sharedProjects={sharedProjects}
+              activeProjectId={activeRoomId}
+            />
+            {children}
 
-          {/* Only mounted with a project open: there is nothing for the
+            {/* Only mounted with a project open: there is nothing for the
               assistant to act on from the editor home. */}
+            {activeProject ? (
+              <AiSidebar
+                isOpen={isAiSidebarOpen}
+                onClose={() => setIsAiSidebarOpen(false)}
+              />
+            ) : null}
+          </main>
+
+          {/* Mounted only with a project open, for the same reason as the navbar's
+            share button: there is nothing to share from the editor home. */}
           {activeProject ? (
-            <AiSidebar
-              isOpen={isAiSidebarOpen}
-              onClose={() => setIsAiSidebarOpen(false)}
+            <ShareProjectDialog
+              open={share.isOpen}
+              projectName={activeProject.name}
+              canManage={activeProject.ownership === "owned"}
+              collaborators={share.collaborators}
+              isLoading={share.isLoading}
+              loadError={share.loadError}
+              email={share.email}
+              canInvite={share.canInvite}
+              isInviting={share.isInviting}
+              inviteError={share.inviteError}
+              removingId={share.removingId}
+              removeError={share.removeError}
+              isLinkCopied={share.isLinkCopied}
+              copyError={share.copyError}
+              onEmailChange={share.setEmail}
+              onOpenChange={(open) => {
+                if (!open) {
+                  share.close();
+                }
+              }}
+              onInvite={share.invite}
+              onRemove={share.remove}
+              onCopyLink={share.copyLink}
             />
           ) : null}
-        </main>
-
-        {/* Mounted only with a project open, for the same reason as the navbar's
-            share button: there is nothing to share from the editor home. */}
-        {activeProject ? (
-          <ShareProjectDialog
-            open={share.isOpen}
-            projectName={activeProject.name}
-            canManage={activeProject.ownership === "owned"}
-            collaborators={share.collaborators}
-            isLoading={share.isLoading}
-            loadError={share.loadError}
-            email={share.email}
-            canInvite={share.canInvite}
-            isInviting={share.isInviting}
-            inviteError={share.inviteError}
-            removingId={share.removingId}
-            removeError={share.removeError}
-            isLinkCopied={share.isLinkCopied}
-            copyError={share.copyError}
-            onEmailChange={share.setEmail}
-            onOpenChange={(open) => {
-              if (!open) {
-                share.close();
-              }
-            }}
-            onInvite={share.invite}
-            onRemove={share.remove}
-            onCopyLink={share.copyLink}
-          />
-        ) : null}
-      </div>
+        </div>
+      </StarterTemplatesProvider>
     </ProjectDialogsProvider>
   );
 }

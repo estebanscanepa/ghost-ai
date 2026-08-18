@@ -3,6 +3,7 @@ import type { NextResponse } from "next/server";
 
 import type { ProjectModel } from "@/app/generated/prisma/models";
 import { forbidden, notFound, type ApiErrorBody } from "@/lib/api-response";
+import { type ClerkProfile, toClerkProfile } from "@/lib/clerk-users";
 import { normalizeCollaboratorEmail } from "@/lib/collaborator-email";
 import { prisma } from "@/lib/prisma";
 import type { ProjectOwnership } from "@/types/project";
@@ -22,11 +23,18 @@ import type { ProjectOwnership } from "@/types/project";
  *
  * Both are lowercased, because the collaborator comparison is a case-sensitive
  * SQL one and invites are stored lowercased. See `normalizeCollaboratorEmail`.
+ *
+ * `profile` is the display name and avatar Clerk holds for this account, and is
+ * `null` when the user record could not be read. It is decoration — nothing
+ * here authorizes anything — but it comes free: the same `currentUser()` call
+ * that yields the addresses already carries it, so the Liveblocks auth route
+ * can put a name and an avatar in a session token without a second Clerk read.
  */
 export interface CurrentIdentity {
   userId: string;
   email: string | null;
   emails: string[];
+  profile: ClerkProfile | null;
 }
 
 /** A project the caller may open, and the reason they may. */
@@ -39,9 +47,10 @@ export interface ProjectAccess {
  * The current Clerk identity, or `null` when the request is unauthenticated.
  *
  * Both reads come from the same session: `auth()` for the user ID and
- * `currentUser()` for the addresses. A session whose user record cannot be
- * loaded still yields an identity — it simply has no email, so it can own
- * projects but not reach one as a collaborator.
+ * `currentUser()` for the addresses and the display profile. A session whose
+ * user record cannot be loaded still yields an identity — it simply has no
+ * email and no profile, so it can own projects but not reach one as a
+ * collaborator, and it joins a room under a fallback label.
  */
 export async function getCurrentIdentity(): Promise<CurrentIdentity | null> {
   const { userId } = await auth();
@@ -53,7 +62,7 @@ export async function getCurrentIdentity(): Promise<CurrentIdentity | null> {
   const user = await currentUser();
 
   if (!user) {
-    return { userId, email: null, emails: [] };
+    return { userId, email: null, emails: [], profile: null };
   }
 
   const verified = user.emailAddresses.filter(
@@ -72,6 +81,7 @@ export async function getCurrentIdentity(): Promise<CurrentIdentity | null> {
     emails: verified.map((address) =>
       normalizeCollaboratorEmail(address.emailAddress),
     ),
+    profile: toClerkProfile(user),
   };
 }
 

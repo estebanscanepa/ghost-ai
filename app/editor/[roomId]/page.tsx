@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
+import { CanvasRoom } from "@/components/canvas/canvas-room";
 import { AccessDenied } from "@/components/editor/access-denied";
-import { CanvasPlaceholder } from "@/components/editor/canvas-placeholder";
 import { checkProjectAccess, getCurrentIdentity } from "@/lib/project-access";
 
 /**
@@ -12,7 +12,10 @@ import { checkProjectAccess, getCurrentIdentity } from "@/lib/project-access";
  * The segment is the room ID, which is also the project ID — one identifier
  * addresses both the record and the Liveblocks room.
  *
- * The canvas itself is still a placeholder; React Flow and the room mount here.
+ * The page stays server-side; `CanvasRoom` is the client boundary that joins
+ * the room. Access is therefore settled twice, and deliberately: once here
+ * before any canvas renders, and again by `POST /api/liveblocks-auth` before a
+ * room token is issued.
  */
 export default async function ProjectWorkspacePage(
   props: PageProps<"/editor/[roomId]">,
@@ -32,5 +35,5 @@ export default async function ProjectWorkspacePage(
     return <AccessDenied />;
   }
 
-  return <CanvasPlaceholder />;
+  return <CanvasRoom roomId={roomId} />;
 }
