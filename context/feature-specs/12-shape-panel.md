@@ -24,7 +24,17 @@ Add a bottom shape panel so users can drag shapes onto the canvas and create new
 5. On drop:
    - read the dragged shape payload
    - convert the screen position to canvas coordinates using React Flow
-   - create a new node at that position
+   - create a new node **centred on** that position
+
+   The node is centred rather than placed corner-first: this unit's original
+   requirement said "at that position", and React Flow reads a node's
+   `position` as its top-left corner, so a node created literally at the
+   converted point lands half its footprint down and to the right of the
+   cursor. Half the width and height come off each axis — in flow units, since
+   `screenToFlowPosition` has already undone the zoom. `addShapeNode` in
+   `CollaborativeCanvas` owns that offset so the drag route and the keyboard
+   route cannot disagree about it, and `ShapePanel` anchors its drag ghost at
+   the preview's centre to match.
    - use an empty label
    - use the default node color
    - use the dragged shape value
