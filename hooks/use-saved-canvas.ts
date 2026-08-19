@@ -17,8 +17,10 @@ import type { CanvasEdge, CanvasNode } from "@/types/canvas";
  * Seeds an empty room from the project's saved canvas.
  *
  * Scoped to one room for the whole of its life. It decides on its first render
- * whether this room needs restoring at all, and never revisits that — so it must
- * be remounted when the room changes rather than handed a new `projectId`.
+ * whether this room needs restoring at all, and only ever narrows that answer
+ * afterwards — a room found to be non-empty when the response lands is left
+ * alone, but a room that was non-empty to begin with is never revisited. So it
+ * must be remounted when the room changes rather than handed a new `projectId`.
  * `CanvasRoom` keys the canvas on the room id to guarantee that.
  */
 
@@ -91,6 +93,45 @@ export function useSavedCanvas({
   const hasRequested = useRef(false);
 
   /**
+   * Whether this hook is still mounted, so a response that arrives after the
+   * canvas has gone is dropped rather than acted on. Opening another project
+   * unmounts the canvas — `CanvasRoom` keys it on the room id — and the request
+   * for the room being left is still in flight when it does.
+   *
+   * Only the *unmount* may clear this, which is why it is its own effect with an
+   * empty dependency list rather than a flag scoped to the request effect below.
+   * That effect deliberately survives its own re-runs: `hasRequested` means the
+   * second run starts no new request, so a flag cleared by its cleanup would
+   * strand the first run's response with nothing left to receive it and leave the
+   * room in `loading` forever — autosave never arming. React Strict Mode mounts,
+   * cleans up, and mounts again in development, so that is not a hypothetical.
+   * Set on the way in as well as cleared on the way out, for that same remount.
+   */
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  /**
+   * The room's live graph, for the second look taken when the response lands.
+   * `phase` answers "was this room empty?" on the first render and is frozen
+   * there, but the write happens a network round trip later, and the room is
+   * shared — a dropped shape, a template import, or a collaborator's node can
+   * arrive in between. Written from an effect rather than during render, the same
+   * way `useCanvasAutosave` keeps its own `latestRef`.
+   */
+  const graphRef = useRef({ nodes, edges });
+
+  useEffect(() => {
+    graphRef.current = { nodes, edges };
+  }, [edges, nodes]);
+
+  /**
    * The room's history, reached for the same reason `handleImportTemplate` reaches
    * for it: the restore is two writes, and without pausing they are two entries,
    * so the first undo would take back the edges and leave the nodes — a canvas
@@ -106,6 +147,17 @@ export function useSavedCanvas({
     hasRequested.current = true;
 
     void fetchSavedCanvas(projectId).then((result) => {
+      /* Ahead of everything, the failure branch included. Past this point the
+         callback writes into the room through `onNodesChange` / `onEdgesChange`,
+         fits the viewport through `onRestore`, and reports through `onError` —
+         and `onError` is the one that does real damage late, because it reaches
+         `CanvasSaveProvider`, which lives in `EditorShell` and outlives the
+         canvas. A failed load for the project just closed would otherwise
+         surface as an error on the Save button of the project just opened. */
+      if (!isMounted.current) {
+        return;
+      }
+
       if (!result.ok) {
         setPhase("failed");
         setError(result.message);
@@ -118,6 +170,25 @@ export function useSavedCanvas({
       // Nothing has ever been saved for this project. The room stays empty and
       // autosave arms on it, so the first thing drawn is the first thing stored.
       if (!document) {
+        setPhase("settled");
+        return;
+      }
+
+      /* The emptiness check, made again against the room as it is now rather than
+         as it was when the request went out. Restoring on top of what arrived
+         would merge a saved canvas that is older by definition into work somebody
+         is in the middle of — and it would also strand autosave: it arms only
+         once the live graph serializes to exactly `expectedPayload`, which a
+         graph carrying both the restore and the new content never does, so the
+         room would never be saved again for the rest of the session.
+
+         Settled rather than failed, and with no `expectedPayload`: nothing was
+         written, so there is nothing for autosave to wait to see, and the room as
+         it stands is exactly what it should take as its baseline. `onRestore` is
+         not called either — no graph landed, so there is nothing to fit to. */
+      const live = graphRef.current;
+
+      if (live.nodes.length > 0 || live.edges.length > 0) {
         setPhase("settled");
         return;
       }

@@ -106,7 +106,23 @@ export function AiSidebar({ isOpen, onClose }: AiSidebarProps) {
           </TabsList>
         </div>
 
-        <TabsContent value="architect" className="flex min-h-0 flex-col">
+        {/* `forceMount` because the transcript and the composer's draft are the
+            panel's own state: Radix unmounts an inactive tab's children, so a
+            trip to Specs and back would otherwise discard a conversation. Kept
+            mounted, they survive the switch.
+
+            The `hidden` that normally comes with an inactive tab goes away with
+            `forceMount` — Radix sets it from the same flag — so the hiding has
+            to be reinstated here, and it has to be `hidden` as a *class* rather
+            than the attribute: `flex` beside it is author-origin CSS and would
+            beat the browser's own `[hidden]` rule, leaving this panel on screen
+            underneath the Specs tab. `AiSpecsPanel` needs none of this; it holds
+            no state to lose. */}
+        <TabsContent
+          value="architect"
+          forceMount
+          className="flex min-h-0 flex-col data-[state=inactive]:hidden"
+        >
           <AiArchitectPanel />
         </TabsContent>
 

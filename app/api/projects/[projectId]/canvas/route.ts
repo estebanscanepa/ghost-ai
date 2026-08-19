@@ -9,6 +9,7 @@ import {
 } from "@/lib/api-response";
 import { readCanvasBlob, writeCanvasBlob } from "@/lib/canvas-blob";
 import {
+  CANVAS_DOCUMENT_MAX_BYTES,
   CANVAS_DOCUMENT_MAX_ELEMENTS,
   canvasDocumentSize,
   parseCanvasDocument,
@@ -95,10 +96,25 @@ export async function PUT(
     return unauthorized();
   }
 
-  const body = await readJsonObject(request);
+  /*
+   * The byte cap is enforced while the body is being read, before any of it is
+   * buffered or parsed. It is not the same guard as the element cap below and
+   * does not replace it: that one bounds how much *canvas* a request may carry
+   * and can only be applied to a parsed document, which means parsing first —
+   * and a stored node's `id` and `label` have no length of their own, so a
+   * single-node document can be arbitrarily large and still be one element.
+   * This is what keeps the work of getting to that check bounded.
+   */
+  const body = await readJsonObject(request, {
+    maxBytes: CANVAS_DOCUMENT_MAX_BYTES,
+  });
 
   if (!body.ok) {
-    return invalidRequest("Request body must be a JSON object.");
+    return body.reason === "too_large"
+      ? invalidRequest(
+          `A canvas request may be at most ${CANVAS_DOCUMENT_MAX_BYTES} bytes.`,
+        )
+      : invalidRequest("Request body must be a JSON object.");
   }
 
   const document = parseCanvasDocument(body.value.canvas);

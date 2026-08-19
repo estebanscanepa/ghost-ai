@@ -43,6 +43,19 @@ import type {
  */
 export const CANVAS_DOCUMENT_MAX_ELEMENTS = 5000;
 
+/**
+ * The same ceiling measured in bytes on the wire, and it is not redundant with
+ * the count above: a stored node carries an `id` and a `label` of no fixed
+ * length, so a document of one node can be arbitrarily large and still be one
+ * element. This is the limit that can be enforced *before* the body is buffered,
+ * which is the only reason it is expressed in bytes — the element cap has to
+ * parse the payload to apply it, and parsing is the cost being avoided.
+ *
+ * 4 MiB against roughly 400 bytes per element at the count limit: a diagram that
+ * reaches this is not one anyone drew by hand.
+ */
+export const CANVAS_DOCUMENT_MAX_BYTES = 4 * 1024 * 1024;
+
 const NODE_SHAPE_IDS = new Set<string>(NODE_SHAPES);
 const NODE_COLOR_IDS = new Set<string>(NODE_COLORS.map((color) => color.id));
 const HANDLE_IDS = new Set<string>(NODE_HANDLE_IDS);
