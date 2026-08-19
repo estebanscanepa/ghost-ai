@@ -9,6 +9,7 @@ import {
   Sparkles,
 } from "lucide-react";
 
+import { CanvasSaveButton } from "@/components/editor/canvas-save-button";
 import { useStarterTemplates } from "@/components/editor/starter-templates-provider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -32,7 +33,8 @@ interface EditorNavbarProps {
 /**
  * Top chrome for every editor screen. Fixed height so the canvas below it can
  * claim the remaining viewport. The centre names the open project; the right
- * section holds the project actions and Clerk's account menu.
+ * section holds either the project actions or Clerk's account menu, depending on
+ * which of the two screens this is rendering for.
  */
 export function EditorNavbar({
   isSidebarOpen,
@@ -78,6 +80,12 @@ export function EditorNavbar({
       <div className="flex flex-1 items-center justify-end gap-2">
         {project ? (
           <>
+            {/* Ahead of both dialogs: what the editor has stored is read before
+                a template is imported or the project is shared. It carries the
+                autosave status as well as triggering a save — see
+                `CanvasSaveButton`. */}
+            <CanvasSaveButton />
+
             {/* Ahead of Share, in the order the two are reached for: a template
                 is imported while a diagram is being started, and it is shared
                 once there is something on the canvas to share. */}
@@ -115,9 +123,19 @@ export function EditorNavbar({
               />
             </Button>
           </>
-        ) : null}
+        ) : (
+          /* Editor home only. In a workspace the account menu is the canvas's
+             presence group instead — it ends in a `UserButton` of its own, as
+             the current user's face among the collaborators in the room (see
+             `components/canvas/presence-avatars.tsx`), so a second one here
+             would be the same menu twice in the same corner.
 
-        <UserButton />
+             `project` is null on the access-denied screen too, which is the
+             behaviour we want: that route mounts no canvas, so it has no
+             presence group, and this stays the only way out to the account
+             menu. */
+          <UserButton />
+        )}
       </div>
     </header>
   );

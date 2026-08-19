@@ -193,6 +193,31 @@ not repeat, and every node is a write to a document collaborators are watching.
 
 React Flow `<Background>` component. Canvas sits on the base background color.
 
+## Canvas Save Status
+
+### Save Button
+
+The canvas autosaves, so the navbar's `Save` button is the save status as much as
+it is a control — one thing rather than a button beside an indicator. Same
+treatment as `Templates` and `Share` beside it, `variant="outline" size="sm"` with
+a Lucide icon, and it leads the group: what the editor has stored is read before
+either dialog is reached for. Rendered only with a project open.
+
+Four states, each a Lucide stroke icon at `h-4 w-4` plus one word:
+
+- **Save** — `Save`, `text-copy-secondary` by inheritance. Nothing has been
+  stored yet in this room. Pressing it stores the canvas whether or not autosave
+  thought anything had changed.
+- **Saving** — `LoaderCircle` with `animate-spin`. The button is disabled for the
+  duration, so a second press cannot race the first.
+- **Saved** — `Check` in `text-success`.
+- **Save failed** — `TriangleAlert` in `text-error`. The reason is the button's
+  `title`, not a line of copy in the navbar: the message is a sentence, the navbar
+  has room for a word, and the retry is the button already under the pointer.
+
+The label carries `aria-live="polite"` so a state change is announced without
+interrupting.
+
 ## Starter Templates
 
 ### Entry Point
@@ -239,6 +264,128 @@ measured rather than preferred: percentages resolve against the content box whil
 `aspect-[2/1]` constrains the border box, so a 1px border leaves a 286×142 content
 box inside a 288×144 frame — not 2:1 — and the two axes come out scaled by 0.993
 and 0.986. A ring is a box-shadow, takes no part in layout, and takes that to zero.
+
+## AI Sidebar
+
+### Panel
+
+The right-hand slide-over, unchanged in placement and behaviour: `absolute
+inset-y-3 right-3`, `w-80`, `rounded-2xl`, `border-surface-border`, and a 200ms
+`translate-x` slide that leaves it mounted and `inert` when closed so the canvas
+viewport never resizes.
+
+The surface is `bg-base/95` — the canvas's own colour, so the bubbles and cards
+inside it read as raised rather than level — with `backdrop-blur` and `shadow-lg`,
+which is what separates the panel from the canvas now that the two share a
+background.
+
+### Header
+
+A `bg-ai/15` tile holding a `Bot` stroke, then `AI Workspace` in
+`text-sm font-semibold text-copy-primary` over `Collaborate with Ghost AI` in
+`text-xs text-copy-muted`, with the sidebar's `ghost` / `icon-sm` close button
+aligned right.
+
+### Tabs
+
+The shadcn `Tabs` primitive in its **default** (pill) variant — unlike the project
+sidebar's `line` variant — on a `bg-subtle` list. Active is `bg-ai/15` with
+`text-ai-text`; inactive is `text-copy-muted` going to `text-copy-secondary` on
+hover. Overrides are written twice, bare and under `dark:`, because the primitive
+states its own active colours in both.
+
+`AI Architect` and `Specs`, in that order.
+
+### AI Architect
+
+- **Transcript** — the only scrolling region in the panel (`min-h-0 flex-1
+  overflow-y-auto`), pinned to the bottom on every append.
+- **Empty state** — a faint `Bot` at `h-8 w-8`, a line of `text-xs
+  text-copy-muted`, and the starter chips: soft `rounded-full` pills on
+  `bg-subtle` in `text-ai-text`, tinting to `bg-ai/15` on hover. A chip sends its
+  prompt.
+- **User message** — right-aligned, `rounded-2xl`, `bg-accent-dim` behind
+  `border-2 border-brand/50`, `text-copy-primary`.
+- **Assistant message** — left-aligned, `rounded-2xl`, `bg-elevated` behind
+  `border border-surface-border`, `text-ai-text`.
+- **Composer** — a `Textarea` on `bg-surface` bounded to `min-h-[72px]
+  max-h-40`, growing with its content through `field-sizing-content`, beside a
+  `size="icon"` send button in `bg-ai` with `text-copy-primary`. `Enter` sends,
+  `Shift + Enter` inserts a newline, and a `text-copy-faint` hint says so.
+
+Both bubbles cap at `max-w-[85%]` and keep `whitespace-pre-wrap`, so a message
+written across several lines is drawn across them.
+
+### Specs
+
+A full-width `Generate Spec` button in `bg-ai` with `text-copy-primary`, then the
+spec list: `rounded-2xl` cards on `bg-elevated` with `border-surface-border`,
+each a `FileText` stroke in `text-ai-text`, a `text-sm text-copy-primary` title, a
+`text-xs text-copy-muted` snippet, and a trailing icon button for download.
+
+### Accent Usage
+
+`bg-accent` / `text-accent` are shadcn tokens mapped to `--bg-subtle`, a surface —
+they are not the accent this panel means. AI surfaces use `--accent-ai` (`bg-ai`,
+tinted `bg-ai/15` for fills behind text) and `--accent-ai-text` (`text-ai-text`),
+and the brand cyan stays with the user's own messages. Near-white text on an
+accent fill is `text-copy-primary`, never `text-white`.
+
+## Presence
+
+### Participant Group
+
+A floating pill in the **canvas's** top-right corner — the same surface as the
+shape panel and the control bar (`rounded-full`, `bg-surface/95`,
+`border-surface-border`, `backdrop-blur`, `shadow-lg`), because it is a third
+overlay on the same canvas. It appears only in the editor room view; the editor
+home navbar is unchanged.
+
+Left to right: the collaborator stack, a divider, and the current user. The
+divider is the control bar's — `h-5 w-px bg-surface-border`, `aria-hidden` — and
+is drawn only when at least one collaborator is present. Alone in a room the
+group is the account button and nothing else.
+
+The corner it sits in is the one the AI sidebar covers, so the group offsets its
+`right` by `--canvas-right-inset`, which the editor shell sets to the width the
+sidebar is claiming, and transitions over the sidebar's own 200ms.
+
+### Collaborator Avatars
+
+32px (`size-8`) faces in a `-space-x-2` overlapping stack, five at most, then a
+`+N` chip on `bg-subtle` in `text-copy-secondary`. Every face carries
+`ring-2 ring-surface` — the pill's own surface — which separates two overlapping
+faces and keeps a dark avatar readable against the canvas.
+
+A profile photo is a plain `<img>`, `rounded-full object-cover`. Without one, the
+person's initials on their **presence colour** with `--bg-base` text, so the face
+in the corner and the pointer on the canvas identify the same person twice.
+Display-only: no button, no tab stop, no hover state — a `title` and an
+`sr-only` name are the whole of the affordance.
+
+### Current User
+
+Clerk's `UserButton`, sized to the collaborators through
+`appearance.elements.userButtonAvatarBox`. It is the current user's face in the
+group, never a sixth collaborator avatar — the presence list has already had
+them filtered out of it. With a project open it is also the *only* account menu
+on screen: the navbar renders its own `UserButton` on the editor home alone, so
+profile and sign-out are reached from this group once a workspace is open.
+
+### Live Cursors
+
+One pointer per other participant, never the current user. A 20×30 filled glyph
+in the participant's presence colour, outlined in `--bg-base` so it survives
+crossing a node of a similar hue, with a `rounded-full` name badge in the same
+colour hanging down and to the right of the tail — clear of the tip, which is
+the part that says where the person is pointing.
+
+Drawn in a `pointer-events-none` layer over the canvas at constant size, whatever
+the zoom: positions travel in canvas coordinates and are converted back through
+the live viewport transform rather than rendered inside it. Each pointer eases
+its transform over 100ms linear, matching the rate Liveblocks throttles presence
+at, so it glides between the positions that arrive instead of stepping between
+them.
 
 ## Component Library
 

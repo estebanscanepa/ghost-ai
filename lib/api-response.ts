@@ -10,7 +10,8 @@ export type ApiErrorCode =
   | "forbidden"
   | "not_found"
   | "conflict"
-  | "invalid_request";
+  | "invalid_request"
+  | "upstream_error";
 
 export interface ApiErrorBody {
   error: {
@@ -51,4 +52,16 @@ export function conflict(message: string): NextResponse<ApiErrorBody> {
 
 export function invalidRequest(message: string): NextResponse<ApiErrorBody> {
   return apiError(400, "invalid_request", message);
+}
+
+/**
+ * A service this request depends on answered, and the answer was unusable — the
+ * canvas blob a project points at cannot be understood, for instance. Separate
+ * from a `500`, which is this app faulting, and from a `404`, which would tell
+ * the caller nothing is there when something is: the client needs to know the
+ * difference, because "nothing saved" and "the save could not be read" call for
+ * opposite behaviour.
+ */
+export function upstreamError(message: string): NextResponse<ApiErrorBody> {
+  return apiError(502, "upstream_error", message);
 }

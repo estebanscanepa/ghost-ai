@@ -7,6 +7,7 @@ import {
   useHistory,
   useRedo,
   useUndo,
+  useUpdateMyPresence,
 } from "@liveblocks/react/suspense";
 import {
   Background,
@@ -20,16 +21,27 @@ import {
   type NodeTypes,
   type XYPosition,
 } from "@xyflow/react";
-import { useCallback, useRef, type DragEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type DragEvent,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 
 import { CanvasControls } from "@/components/canvas/canvas-controls";
+import { CanvasCursors } from "@/components/canvas/canvas-cursors";
 import { CanvasEdge } from "@/components/canvas/canvas-edge";
 import { CanvasNode } from "@/components/canvas/canvas-node";
+import { PresenceAvatars } from "@/components/canvas/presence-avatars";
 import { ShapePanel } from "@/components/canvas/shape-panel";
+import { useCanvasSave } from "@/components/editor/canvas-save-provider";
 import { StarterTemplatesModal } from "@/components/editor/starter-templates-modal";
 import { useStarterTemplates } from "@/components/editor/starter-templates-provider";
 import type { CanvasTemplate } from "@/components/editor/starter-templates";
+import { useCanvasAutosave } from "@/hooks/use-canvas-autosave";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useSavedCanvas } from "@/hooks/use-saved-canvas";
 import { readShapeDragPayload, SHAPE_DRAG_MIME_TYPE } from "@/lib/canvas-drag";
 import { createCanvasNode } from "@/lib/canvas-nodes";
 import { CANVAS_VIEWPORT_DURATION } from "@/lib/canvas-viewport";
@@ -65,23 +77,37 @@ const EDGE_TYPES: EdgeTypes = {
   [CANVAS_EDGE_TYPE]: CanvasEdge,
 };
 
+interface CollaborativeCanvasProps {
+  /** The project whose canvas this is. Also the room id — one identifier for both. */
+  projectId: string;
+}
+
 /**
  * The React Flow surface, backed by Liveblocks Storage.
  *
  * `useLiveblocksFlow` owns the nodes, the edges, and the change handlers — this
  * component holds no graph state of its own, so a change made here and a change
  * made by a collaborator take the same path into Storage and there is no local
- * copy to reconcile. Nothing is persisted to the database or Blob yet; Storage
- * is the whole of it.
+ * copy to reconcile.
+ *
+ * Storage is no longer the whole of it: `useSavedCanvas` seeds an empty room from
+ * the project's stored snapshot and `useCanvasAutosave` writes the room back to it.
+ * Both are hung off the same `nodes` / `edges` / change handlers the canvas already
+ * draws from, so persistence watches the graph rather than intercepting it.
  *
  * Suspense is on, so `nodes` and `edges` are always arrays: the `isLoading`
  * branch is handled by the `ClientSideSuspense` fallback in `CanvasRoom`, and a
  * failed connection by the error boundary above it.
  *
  * Requires a `ReactFlowProvider` above it (mounted in `CanvasRoom`), because
- * `screenToFlowPosition` is what turns a drop into canvas coordinates.
+ * `screenToFlowPosition` is what turns a drop into canvas coordinates, and a
+ * `CanvasSaveProvider` (mounted in `EditorShell`), which is how the save status
+ * reaches the navbar.
+ *
+ * Mounted with a `key` on the room id, because the two persistence hooks are
+ * scoped to one room for their whole lives — see `CanvasRoom`.
  */
-export function CollaborativeCanvas() {
+export function CollaborativeCanvas({ projectId }: CollaborativeCanvasProps) {
   const { nodes, edges, onNodesChange, onEdgesChange, onConnect, onDelete } =
     useLiveblocksFlow<CanvasNodeType, CanvasEdgeType>({
       suspense: true,
@@ -127,6 +153,123 @@ export function CollaborativeCanvas() {
    */
   const starterTemplates = useStarterTemplates();
 
+  /**
+   * Persistence, both directions.
+   *
+   * The status is reported into `CanvasSaveProvider` rather than held here,
+   * because what renders it is the navbar's Save button — on the other side of
+   * the route boundary, the same crossing `useStarterTemplates` makes in the
+   * opposite direction. `report` and `registerSave` are stable for the life of
+   * the provider, which is what autosave requires of the callback it publishes
+   * through.
+   */
+  const { report, registerSave } = useCanvasSave();
+
+  /**
+   * A restored canvas is drawn at the coordinates it was saved at, which has
+   * nothing to do with the viewport this room opened at: the `fitView` prop is
+   * consumed on mount, while the room is still empty and there is nothing to fit.
+   * Fitting once the graph lands is the same courtesy `handleImportTemplate` does
+   * after an import, and for the same reason.
+   */
+  const handleRestore = useCallback(() => {
+    void reactFlow.fitView({ duration: CANVAS_VIEWPORT_DURATION });
+  }, [reactFlow]);
+
+  const handleLoadError = useCallback(
+    (message: string) => {
+      report({ status: "error", message });
+    },
+    [report],
+  );
+
+  /* Seeds the room from the project's stored canvas, and only ever when the room
+     is empty — see the hook. It writes through `onNodesChange` / `onEdgesChange`,
+     the same door a dropped shape and a template import use. */
+  const savedCanvas = useSavedCanvas({
+    projectId,
+    nodes,
+    edges,
+    onNodesChange,
+    onEdgesChange,
+    onError: handleLoadError,
+    onRestore: handleRestore,
+  });
+
+  const { saveNow } = useCanvasAutosave({
+    projectId,
+    nodes,
+    edges,
+    isEnabled: savedCanvas.isSettled,
+    expectedPayload: savedCanvas.expectedPayload,
+    onStatusChange: report,
+  });
+
+  const loadError = savedCanvas.error;
+
+  /**
+   * What the navbar's Save button ends up calling.
+   *
+   * A canvas whose stored copy could not be read is the one case where saving is
+   * the wrong answer: the room may be the empty one the failed restore was about
+   * to fill, and writing it would put nothing where a diagram was. Autosave holds
+   * itself back for exactly this; the button has to as well, and it re-states why
+   * rather than appearing to do nothing.
+   */
+  const requestSave = useCallback(() => {
+    if (loadError !== null) {
+      report({ status: "error", message: loadError });
+      return;
+    }
+
+    saveNow();
+  }, [loadError, report, saveNow]);
+
+  /* Registered rather than passed down, because the caller is in the editor
+     layout. `registerSave` writes a ref, so this is an ordinary
+     tell-an-external-system effect and not a render cascade. */
+  useEffect(() => {
+    registerSave(requestSave);
+
+    return () => registerSave(null);
+  }, [registerSave, requestSave]);
+
+  /**
+   * The one writer of this user's cursor into the room. Presence rather than an
+   * event, because a cursor is state — a collaborator who joins mid-session
+   * should see the pointers already on the canvas, which a broadcast they were
+   * not present for could not tell them about.
+   *
+   * Liveblocks throttles presence for us, so calling this on every `mousemove`
+   * costs one message per throttle window rather than one per pixel.
+   */
+  const updateMyPresence = useUpdateMyPresence();
+
+  /**
+   * Canvas coordinates, not screen coordinates, and that is the whole reason
+   * this goes through `screenToFlowPosition` — the same conversion a dropped
+   * shape takes. Two people looking at the room at different pans and zooms
+   * have to agree on *where in the diagram* a pointer is, and only flow space
+   * is common to both; `CanvasCursors` converts back on the way out.
+   */
+  const handleMouseMove = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      updateMyPresence({
+        cursor: screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+      });
+    },
+    [screenToFlowPosition, updateMyPresence],
+  );
+
+  /**
+   * A pointer that has left the canvas has no position on it, so the cursor is
+   * cleared rather than parked where it was last seen — `null` is what
+   * `CanvasCursors` reads as "do not draw this one at all".
+   */
+  const handleMouseLeave = useCallback(() => {
+    updateMyPresence({ cursor: null });
+  }, [updateMyPresence]);
+
   /* The keyboard path to the same three actions the control bar exposes. Bound
      here rather than inside `CanvasControls` because it listens on `window`,
      which is the canvas's business rather than the toolbar's. */
@@ -151,9 +294,26 @@ export function CollaborativeCanvas() {
    * Storage directly: an `add` change is the controlled-flow way to introduce a
    * node, so a drag-created node, a keyboard-created node, a collaborator's
    * node, and a node the AI writes all reach Storage down the same path.
+   *
+   * The point is where the node's *centre* goes, and the half-footprint offset
+   * onto React Flow's top-left `position` happens here rather than in each
+   * caller. Both callers have somewhere they mean — the cursor, the middle of
+   * the pane — and neither means "the corner", so a caller that forgot to
+   * compensate would place the node down and to the right of the spot it named.
+   * Doing it once is what makes the drag route and the keyboard route agree.
+   *
+   * Both axes are flow units on either side of the subtraction: `centre` comes
+   * out of `screenToFlowPosition`, and a node's `width` / `height` are flow
+   * units by definition (see `NodeSize`). So zoom is already accounted for and
+   * must not be divided out again.
    */
   const addShapeNode = useCallback(
-    (shape: NodeShape, position: XYPosition, size: NodeSize) => {
+    (shape: NodeShape, centre: XYPosition, size: NodeSize) => {
+      const position = {
+        x: centre.x - size.width / 2,
+        y: centre.y - size.height / 2,
+      };
+
       onNodesChange([
         { type: "add", item: createCanvasNode({ shape, position, size }) },
       ]);
@@ -161,6 +321,18 @@ export function CollaborativeCanvas() {
     [onNodesChange],
   );
 
+  /**
+   * A shape dropped from the panel lands centred on the pointer.
+   *
+   * `screenToFlowPosition` is the whole conversion: it subtracts the canvas
+   * container's bounding rect and applies the inverse of the current pan and
+   * zoom, so nothing here has to measure the pane or read the viewport
+   * transform. What the drop point does *not* need is where inside the panel
+   * item the user grabbed — `ShapePanel` replaces the drag ghost with its own
+   * image centred on the cursor, so the grab point never enters the placement,
+   * and a browser that declines that image still drops a node centred where the
+   * pointer is.
+   */
   const handleDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
       const payload = readShapeDragPayload(event.dataTransfer);
@@ -169,12 +341,12 @@ export function CollaborativeCanvas() {
       event.preventDefault();
 
       const { shape, width, height } = payload;
-      const position = screenToFlowPosition({
+      const centre = screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
       });
 
-      addShapeNode(shape, position, { width, height });
+      addShapeNode(shape, centre, { width, height });
     },
     [addShapeNode, screenToFlowPosition],
   );
@@ -190,9 +362,8 @@ export function CollaborativeCanvas() {
    * `screenToFlowPosition` the drop uses rather than arithmetic on the viewport
    * transform, so both routes convert screen space to flow space one way.
    *
-   * Half the footprint comes off each axis because React Flow reads `position`
-   * as a node's top-left corner — without it the node would be centred on its
-   * own corner and sit down and to the right of where it was asked for.
+   * The half-footprint offset onto React Flow's top-left `position` is
+   * `addShapeNode`'s, not this function's — see there.
    */
   const handleCreateShape = useCallback(
     (shape: NodeShape) => {
@@ -200,17 +371,12 @@ export function CollaborativeCanvas() {
       if (!pane) return;
 
       const bounds = pane.getBoundingClientRect();
-      const size = NODE_SHAPE_SIZES[shape];
       const centre = screenToFlowPosition({
         x: bounds.left + bounds.width / 2,
         y: bounds.top + bounds.height / 2,
       });
 
-      addShapeNode(
-        shape,
-        { x: centre.x - size.width / 2, y: centre.y - size.height / 2 },
-        size,
-      );
+      addShapeNode(shape, centre, NODE_SHAPE_SIZES[shape]);
     },
     [addShapeNode, screenToFlowPosition],
   );
@@ -284,7 +450,9 @@ export function CollaborativeCanvas() {
   return (
     <div
       ref={paneRef}
-      className="h-full w-full bg-base"
+      /* `relative` so the two presence overlays below position against the pane
+         rather than against the editor's `<main>`. */
+      className="relative h-full w-full bg-base"
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
@@ -316,6 +484,11 @@ export function CollaborativeCanvas() {
         /* React Flow ships light defaults; `dark` switches its own palette,
            which `globals.css` then re-points at the project tokens. */
         colorMode="dark"
+        /* On the wrapper rather than on `onPaneMouseMove`, which only fires over
+           empty canvas: a pointer resting on a node is still in the room and
+           still worth showing to everyone else. */
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
         className="canvas-surface"
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
@@ -331,8 +504,15 @@ export function CollaborativeCanvas() {
         />
       </ReactFlow>
 
-      {/* Outside `ReactFlow`, unlike the two panels above: this is a dialog, not
-          a canvas overlay, and it portals itself to the document body anyway. */}
+      {/* Both outside `ReactFlow` rather than mounted as `Panel`s: the cursor
+          layer positions itself from the viewport transform by hand, and the
+          avatar group has to clear the AI sidebar, which a `Panel`'s own
+          `right: 0` cannot be talked out of. */}
+      <CanvasCursors />
+      <PresenceAvatars />
+
+      {/* Outside `ReactFlow` too, but for a different reason: this is a dialog,
+          not a canvas overlay, and it portals itself to the document body. */}
       <StarterTemplatesModal
         open={starterTemplates.isOpen}
         onOpenChange={(open) => {

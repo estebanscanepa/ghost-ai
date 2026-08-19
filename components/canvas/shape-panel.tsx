@@ -81,15 +81,26 @@ export function ShapePanel({ onCreateShape }: ShapePanelProps) {
     const preview = previewLayerRef.current?.querySelector<HTMLElement>(
       `[data-shape="${shape}"]`,
     );
-    /* Anchored at the preview's top-left, because that is where the node lands:
-       `handleDrop` converts the pointer position and React Flow reads a node's
-       `position` as its top-left corner. Centring the ghost would promise a
-       placement the drop does not make.
+    /* Anchored at the preview's centre, because that is where the node lands:
+       `handleDrop` centres the node on the pointer. Anchoring at the top-left
+       instead — which is what a `0, 0` offset does — would float the ghost down
+       and to the right of the cursor and promise a placement the drop does not
+       make.
 
-       A browser that declines the custom image falls back to its own snapshot of
-       the dragged icon, which is what this replaces — so a failure here costs the
-       nicer preview and nothing else. */
-    if (preview) event.dataTransfer.setDragImage(preview, 0, 0);
+       The offsets are in the image's own CSS pixels, and the preview is rendered
+       at `NODE_SHAPE_SIZES[shape]`, so this is the same record the payload and
+       the dropped node are sized from.
+
+       Centring the ghost is also what makes the grab point irrelevant to the
+       drop: wherever inside the item the user took hold, the image is positioned
+       against the cursor rather than against the grab offset. A browser that
+       declines the custom image falls back to its own snapshot of the dragged
+       icon, which does follow the grab point — the node still lands centred on
+       the cursor, so a failure here costs the nicer preview and nothing else. */
+    if (preview) {
+      const { width, height } = NODE_SHAPE_SIZES[shape];
+      event.dataTransfer.setDragImage(preview, width / 2, height / 2);
+    }
   };
 
   /**

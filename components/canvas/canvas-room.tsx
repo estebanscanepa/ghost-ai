@@ -43,9 +43,9 @@ export function CanvasRoom({ roomId }: CanvasRoomProps) {
           id={roomId}
           /* `cursor: null` because a user who has just arrived has not moved a
              pointer over the canvas yet, and a cursor with no position is not
-             drawn at all. `isThinking: false` because no generation is in
+             drawn at all. `thinking: false` because no generation is in
              flight — see `liveblocks.config.ts` for both. */
-          initialPresence={{ cursor: null, isThinking: false }}
+          initialPresence={{ cursor: null, thinking: false }}
         >
           <ClientSideSuspense fallback={<CanvasLoading />}>
             {/* React Flow's own context, needed a level above the canvas so it
@@ -53,7 +53,15 @@ export function CanvasRoom({ roomId }: CanvasRoomProps) {
                 Inside the suspense boundary rather than outside: it is the
                 canvas that needs it, not the loading state. */}
             <ReactFlowProvider>
-              <CollaborativeCanvas />
+              {/* Keyed on the room, so opening another project remounts the
+                  canvas instead of repointing it. `useSavedCanvas` and
+                  `useCanvasAutosave` both decide something once — whether this
+                  room was empty, and what its stored canvas already contains —
+                  and hold it in refs for the rest of their lives. A room swapped
+                  underneath them would inherit the previous project's answers.
+                  `EditorShell` stays mounted across `/editor` navigations, so
+                  this cannot be left to the router. */}
+              <CollaborativeCanvas key={roomId} projectId={roomId} />
             </ReactFlowProvider>
           </ClientSideSuspense>
         </RoomProvider>

@@ -16,7 +16,7 @@ declare global {
 
       // Whether this user has an AI generation in flight, so collaborators can
       // see the canvas is about to change under them.
-      isThinking: boolean;
+      thinking: boolean;
     };
 
     // The Storage tree for the room, for useMutation, useStorage, etc.
